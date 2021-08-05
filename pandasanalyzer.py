@@ -25,6 +25,8 @@ histos["invm"]=ROOT.TH1F("invm","invm",100,0,5000)
 for hh in histos:
     histos[hh].Sumw2()
 
+#Performing apply on a DataFrame can be slow, but seems to be pretty quick for us
+#Will be good to perform columnwise skimming first 
 def Processor(DataFrame,Func):
     return zip(*df.apply(lambda row: Func(row), axis = 1))
 
