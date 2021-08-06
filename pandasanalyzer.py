@@ -43,14 +43,21 @@ for ih,hh in enumerate(histos):
 #Will be good to perform columnwise skimming first 
 def Processor(DataFrame,Func):
     tqdm(leave=False,disable=True).pandas()
-    return list(zip(*df.progress_apply(lambda row: Func(row), axis = 1)))
+    return df.progress_apply(lambda row: Func(row), axis = 1)
 
-def SetPtEtaPhiM(LV,pt,eta,phi,m):
+def MakeLV(pt,eta,phi,m):
     LV=[]
     for ir in range(len(pt)):
         LV.append(ROOT.TLorentzVector())
         LV[-1].SetPtEtaPhiM(pt[ir],eta[ir],phi[ir],m[ir])
     return LV
+
+def Filter(curdf):
+    C1=(df["FatJet_pt"].str[0]>200.) & (df["FatJet_pt"].str[1]>200.) & (df["FatJet_msoftdrop"].str[0]>50.) & (df["FatJet_msoftdrop"].str[1]>50.)
+
+    return curdf[C1]
+
+
 
 def Analyze(row):
     rvals=[0.0]*len(histos)
@@ -60,7 +67,7 @@ def Analyze(row):
         rvals[histindices["logMSE"]]=np.log(row.FatJet_iAEMSE[0])
     return rvals
 
-branchestoread=["FatJet_pt","FatJet_eta","FatJet_phi","FatJet_mass","FatJet_iAEMSE","nFatJet"]
+branchestoread=["FatJet_pt","FatJet_eta","FatJet_phi","FatJet_mass","FatJet_iAEMSE","FatJet_msoftdrop","nFatJet"]
 maxchunks=1
 sttime = time.time()
 
@@ -68,32 +75,24 @@ sttime = time.time()
 for ichunk,chunk in enumerate(chunklist):
 
 
-
-
-        #Bare Pandas implementation 
+        #Step0: Load data
         print ("Load Pandas Chunk",ichunk,"/",len(chunklist))
         df = pd.read_parquet(chunk)#,columns=branchestoread)
+        df.reset_index(drop=True)
+        
+        #Step1: Filter data (Columnwise)
+        df=Filter(df)
 
-        #t1=time.time()
-        LV=pd.Series(ROOT.TLorentzVector(),index=range(df.shape[0]))
-        df["LV"]=np.vectorize(SetPtEtaPhiM)(LV,df['FatJet_pt'],df['FatJet_eta'],df['FatJet_phi'],df['FatJet_mass'])
-        #print(time.time()-t1)
+        #Step2: Define new columns (Columnwise)
+        df["LV"]=np.vectorize(MakeLV)(df['FatJet_pt'],df['FatJet_eta'],df['FatJet_phi'],df['FatJet_mass'])
 
-
-
-
-
-
-        #LV = LV.apply(lambda x: x.SetPtEtaPhiM(df['FatJet_pt'][0][0],df['FatJet_eta'][0][0],df['FatJet_phi'][0][0],df['FatJet_mass'][0][0]))
-        #print (LV)
-        #LV.apply(SetPtEtaPhiM().axis=0,df[])
-
-        df = df.reset_index(drop=True)
         print ("\tDone -- Events:",df.shape[0],"Branches:",df.shape[1])
         print ("\tRun Pandas Analysis...")
 
-        output=Processor(df,Analyze)
+        #Step3: Run analysis (Rowwise)
+        output=list(zip(*Processor(df,Analyze)))
 
+        #Step3: Fill histograms (Columnwise)
         print ("\tFilling Histograms...")
         for ih,hh in enumerate(histos):
                 nent=len(output[ih])

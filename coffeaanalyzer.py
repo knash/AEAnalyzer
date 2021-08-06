@@ -53,8 +53,10 @@ class MyProcessor(processor.ProcessorABC):
         }, with_name="PtEtaPhiMCandidate")
 
         cut = (ak.num(AK8) >= 2)
+        cut1 = (AK8[cut][:, 0].pt>200.)  & (AK8[cut][:, 1].pt>200.) 
+        cut2 = (events.FatJet_msoftdrop[cut][cut1][:, 0]>50.)  & (events.FatJet_msoftdrop[cut][cut1][:, 1]>50.) 
         # add first and second muon in every event together
-        AK8inv = AK8[cut][:, 0] + AK8[cut][:, 1]
+        AK8inv = AK8[cut][cut1][cut2][:, 0] + AK8[cut][cut1][cut2][:, 1]
 
         output["sumw"][dataset] += len(events)
         output["invm"].fill(
