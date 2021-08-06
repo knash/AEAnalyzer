@@ -1,4 +1,4 @@
-import glob
+from glob import glob
 import uproot
 import awkward as ak
 import numpy as np
@@ -16,14 +16,13 @@ ak.behavior.update(candidate.behavior)
 
 
 fnames={}
-#fnames["TT"] = glob.glob('/eos/uscms/store/user/knash/ZprimeToTT_M2500_W25_TuneCP2_PSweights_13TeV-madgraph-pythiaMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v2_NanoB2GNano2016mc_v0/210731_181605/0000/*.root')
-#fnames["QCD_HT1000to1500"] = glob.glob('/eos/uscms/store/user/knash/QCD_HT1000to1500_TuneCP5_13TeV-madgraph-pythia8/RunIIFall17MiniAODv2-PU2017_12Apr2018_new_pmx_94X_mc2017_realistic_v14-v1_NanoSlimNtuples2017mc_v8/190802_180606/0000/*.root')
-fnames["QCD_HT1500to2000"]= sorted(glob.glob('/eos/uscms/store/user/knash/QCD_HT1500to2000_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/210804_233703/0000/*.root'))
+fnames["TT"] = sorted(glob('/eos/uscms/store/user/knash/ZprimeToTT_M2500_W25_TuneCP2_PSweights_13TeV-madgraph-pythiaMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v2_NanoB2GNano2016mc_v1/210804_233356/0000/*.root'))
+fnames["QCD_HT1500to2000"]= sorted(glob('/eos/uscms/store/user/knash/QCD_HT1500to2000_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/210804_233703/0000/*.root'))
 
 fileset={}
 for ffi in fnames:
     fileset[ffi]=[ffj.replace("/eos/uscms/","root://cmsxrootd.fnal.gov///") for ffj in fnames[ffi]]
-    fileset[ffi]=fileset[ffi][:23]
+    #fileset[ffi]=fileset[ffi][:23]
 
 class MyProcessor(processor.ProcessorABC):
     def __init__(self):
@@ -53,10 +52,11 @@ class MyProcessor(processor.ProcessorABC):
         }, with_name="PtEtaPhiMCandidate")
 
         cut = (ak.num(AK8) >= 2)
-        cut1 = (AK8[cut][:, 0].pt>200.)  & (AK8[cut][:, 1].pt>200.) 
-        cut2 = (events.FatJet_msoftdrop[cut][cut1][:, 0]>50.)  & (events.FatJet_msoftdrop[cut][cut1][:, 1]>50.) 
+        AK8sel = AK8[cut]
+        cut1 = (AK8sel[:, 0].pt>200.)  & (AK8sel[:, 1].pt>200.) & (events.FatJet_msoftdrop[cut][:, 0]>50.) & (events.FatJet_msoftdrop[cut][:, 1]>50.)
+        AK8sel = AK8sel[cut1]
         # add first and second muon in every event together
-        AK8inv = AK8[cut][cut1][cut2][:, 0] + AK8[cut][cut1][cut2][:, 1]
+        AK8inv = AK8sel[:, 0] + AK8sel[:, 1]
 
         output["sumw"][dataset] += len(events)
         output["invm"].fill(
