@@ -34,6 +34,8 @@ class PSequential():
                 inddict[branch]=(df[branch].index)
 
             df=seq(self.Proc,df,cureeventinfo)
+            self.Proc.timing[str(iseq)+":"+str(type(seq))]=(time.time())
+
             if  isinstance(df,type(None)):
                 return df
             if (not isinstance(seq,PFilter)):
@@ -125,6 +127,7 @@ class PProcessor():
         self.eventcontainer=eventcontainer
         self.ana=PSequential(self,sequence)
         self.verbose=verbose
+        self.timing={}
     def Run(self,crange=None):
         STtime=time.time()
 
@@ -164,10 +167,12 @@ class PProcessor():
             print ("-"*20)
             print ("Dataset:",ds,"Started")
             fillH=True
+            timingagg=None
             with tqdm(total=(len(selfiles))) as pbar:
                 for ichunk,chunk in enumerate(selfiles):
 
- 
+                    self.timing={}
+                    self.timing["Start"]=[time.time()]
                     df={}
 
                     bdict={"":self.branches}
@@ -181,12 +186,9 @@ class PProcessor():
                             allcolumns+=[bmaj+delim+x for x in bdict[bmaj]]
                             if not (bmaj in self.scalars):
                                     allcolumns.append("n"+bmaj)
-                    T1=time.time()
-
+                    self.timing["Start"]=(time.time())
                     dffull=pd.read_parquet(chunk,columns=allcolumns)
-                    if (self.verbose):
-                        print("Loaded",time.time()-T1)
-                        T1=time.time()
+                    self.timing["File Read"]=(time.time())
                     for ibmaj,bmaj in enumerate(bdict):
                             delim="_"
                             if bmaj=="":
@@ -226,16 +228,12 @@ class PProcessor():
                     self.cutflow[ds][0]+= nevchunk
                     
                     cureeventinfo=PEventInfo(ds,self.cutflow[ds][0],ichunk,nevchunk,self.eventcontainer)
-                    if (self.verbose):
-                        print("Parsed",time.time()-T1)
-                        T1=time.time()
+                    self.timing["Parsed"]=(time.time())
                     df = self.ana(df,cureeventinfo)
                     if  isinstance(df,type(None)):
                             pbar.update(1)
                             continue
-                    if (self.verbose):
-                        print("Analyzed",time.time()-T1)
-                        T1=time.time()
+                    self.timing["Analyzed"]=(time.time())
                     self.cutflow[ds][1]+= df[""].shape[0]
                     eventlist=df[""]["event"].values
                     for branch in prekeys:
@@ -245,12 +243,17 @@ class PProcessor():
                                     raise ValueError("Events are not 1-to-1 in collection",branch)
                     if fillH:
                         self.FillHist(df["Hists"],ds)
-                    if (self.verbose):
-                        print("Filled",time.time()-T1)
-                        T1=time.time()
+                    self.timing["Histograms Filled"]=(time.time())
             
                     pbar.update(1)
-
+                    if ichunk==0:
+                        timingagg=self.timing
+                    else:
+                        for benchmark in self.timing:
+                            timingagg[benchmark]+=self.timing[benchmark]
+                print("Timing...")
+                for benchmark in timingagg:
+                    print ("\t",benchmark,timingagg[benchmark]-timingagg["Start"])
                 print ("Dataset:",ds,"Completed")
                 print ("Events input:",self.cutflow[ds][0],"output:",self.cutflow[ds][1])
             return(self.hists)
