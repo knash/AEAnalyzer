@@ -17,8 +17,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import itertools
 import xarray as xa
-
-
+import copy 
+import functools
 
 
 class PSequential():
@@ -114,63 +114,111 @@ class PEventInfo():
                 self.nevchunk=nevchunk
                 self.eventcontainer=eventcontainer
 
+def RunProc(Proc):
+    
+    return Proc.Run()
+def FillHist(df,hists):
+        for ih,hh in enumerate(hists):
+                #print(df,hh)
+                nent=len(df[hh])
+                hists[hh].FillN(nent,array("d",df[hh]),array("d",[1.0]*nent))
+
+class PProcRunner():
+    def __init__(self,Proc,nproc):
+                self.nproc=nproc
+                self.Proc=Proc
+    def Run(self,crange=None):
+            fulltime=time.time()
+            if self.nproc>1:
+                    pool = mp.Pool(self.nproc)
+
+                    farrays={}
+                    for iff,ff in enumerate(self.Proc.files):
+                        farrays[ff]=np.array_split(np.array(self.Proc.files[ff]),self.nproc)
+
+                    splitfiles=[]
+                    for proc in range(self.nproc):
+                        splitfiles.append({})
+                        for iff,ff in enumerate(self.Proc.files):
+                            splitfiles[proc][ff]=farrays[ff][proc]
+
+                    allprocs=[]
+                    allinstances=[]
+                    for proc in range(self.nproc):
+                        allprocs.append(copy.deepcopy(self.Proc))
+                        allprocs[-1].files=splitfiles[proc]
+                        allprocs[-1].verbose=False
+                        allprocs[-1].proc=proc
+
+
+
+                    #pool.map(allinstances)
+                    print("Running process over ",self.nproc,"processors")
+                    results = pool.map(RunProc ,[x for x in allprocs])
+                    #results = [pool.apply_async(RunProc for CProc in allprocs)]
+                    print("Done")
+
+                    pool.close()    
+
+                    resarr = results
+                    #print (resarr)
+                    for rr in resarr:
+                        #print (rr)
+                        for ds in rr:
+                                FillHist(rr[ds][0],self.Proc.hists[ds])
+                    #self.Proc.hists=
+            else:
+                    runout=self.Proc.Run(crange)
+                    #print(runout)
+                    #print(self.Proc.hists)
+                    for ds in runout:
+                        FillHist(runout[ds][0],self.Proc.hists[ds])
+            print("Total time",time.time()-fulltime)
+
+
 class PProcessor():
-    def __init__(self,files,hists,branches,sequence,branchname="Dataset",nproc=1,atype="flat",eventcontainer={},scalars=[],verbose=False):
+    def __init__(self,files,hists,branches,sequence,branchname="Dataset",proc=1,atype="flat",eventcontainer={},scalars=[],verbose=True):
         self.files=files
         self.hists=hists 
         self.scalars=scalars 
         self.branches=branches  
         self.branchname=branchname    
-        self.nproc=nproc 
+        self.proc=proc 
         self.cutflow={}
         self.atype=atype
         self.eventcontainer=eventcontainer
         self.ana=PSequential(self,sequence)
         self.verbose=verbose
         self.timing={}
+
     def Run(self,crange=None):
         STtime=time.time()
 
-
+        returnval={}
         for ids,ds in enumerate(self.files):
             selfiles=self.files[ds]
 
             if crange!=None:
                 selfiles=self.files[ds][crange]
-            if self.nproc>1:
-                    pool = mp.Pool(self.nproc)
-                    print (selfiles)
-                    splitfiles=np.array_split(np.array(selfiles),self.nproc)
-                    print (splitfiles)
-                    results = [pool.apply_async(self.RunChunks, args=(ds,spf,ispf)) for ispf,spf in enumerate(splitfiles)]
+            returnval[ds]=self.RunChunks(ds,selfiles)
+        if self.verbose:
+            print ("Execution time",time.time()-STtime)
+        #print(hists)
+        return (returnval)
 
-
-                    pool.close()    
-                    print(results)
-                    for result in results:
-                        print (result.get())
-                    resarr = [result.get() for result in results]
-                    print (resarr)
-            else:
-                    self.RunChunks(ds,selfiles)
-
-        print ("Execution time",time.time()-STtime)
-
-    def FillHist(self,df,ds):
-        for ih,hh in enumerate(self.hists[ds]):
-            nent=len(df[hh])
-            self.hists[ds][hh].FillN(nent,array("d",df[hh]),array("d",[1.0]*nent))
-
-    def RunChunks(self,ds,selfiles,proc=1):
+    def RunChunks(self,ds,selfiles):
 
             self.cutflow[ds]=[0,0]
-            print ("-"*20)
-            print ("Dataset:",ds,"Started")
+            if self.verbose:
+                print ("-"*20)
+                print ("Dataset:",ds,"Started")
             fillH=True
             timingagg=None
-            with tqdm(total=(len(selfiles))) as pbar:
+            histreturn=None
+         
+            with tqdm(total=(len(selfiles)),desc="Dataset:"+ds+" Process:"+str(self.proc)) as pbar:
                 for ichunk,chunk in enumerate(selfiles):
-
+                    #print(ichunk)
                     self.timing={}
                     self.timing["Start"]=[time.time()]
                     df={}
@@ -186,6 +234,7 @@ class PProcessor():
                             allcolumns+=[bmaj+delim+x for x in bdict[bmaj]]
                             if not (bmaj in self.scalars):
                                     allcolumns.append("n"+bmaj)
+                                        
                     self.timing["Start"]=(time.time())
                     dffull=pd.read_parquet(chunk,columns=allcolumns)
                     self.timing["File Read"]=(time.time())
@@ -194,6 +243,8 @@ class PProcessor():
                             if bmaj=="":
                                 delim=""
                             brancharr=[bmaj+delim+x for x in bdict[bmaj]]
+                            tempbr=copy.deepcopy(brancharr)
+                         
                             if bmaj!="":
                                 if not (bmaj in self.scalars):
                                     brancharr.append("n"+bmaj)
@@ -204,19 +255,7 @@ class PProcessor():
                             df[bmaj]=df[bmaj].rename(columns=namemap)
                             df[bmaj]=df[bmaj].dropna(how='all')
 
-                            #maxobj=df[bmaj].dropna(how='all').index.get_level_values(1).max() 
-                            
-                            #idx = pd.IndexSlice
-                            #if self.mind[bmaj]!=None:
-                            #    df[bmaj]=df[bmaj].loc[idx[:,:self.mind[bmaj]],idx[:]]
-
-                            #df[bmaj]=df[bmaj].loc[idx[:,:maxobj],:]
-
                     df["Hists"]=pd.DataFrame(df[""]["event"],index=df[""].index)
-                  
-                    #for branch in df:
-                     #   if branch!="":
-                      #      df[branch] = pd.concat([df[""]["event"],df[branch]],axis=1)
                    
                     df[""]=df[""].droplevel(level=1)
                     df["Hists"]=df["Hists"].droplevel(level=1)
@@ -231,6 +270,7 @@ class PProcessor():
                     self.timing["Parsed"]=(time.time())
                     df = self.ana(df,cureeventinfo)
                     if  isinstance(df,type(None)):
+                            print("Skip",ichunk)
                             pbar.update(1)
                             continue
                     self.timing["Analyzed"]=(time.time())
@@ -241,22 +281,29 @@ class PProcessor():
                                 br = df[branch]["event"].dropna().values==eventlist
                                 if not (br).all():
                                     raise ValueError("Events are not 1-to-1 in collection",branch)
-                    if fillH:
-                        self.FillHist(df["Hists"],ds)
+                    if ichunk==0:
+                        histreturn=df["Hists"]
+                    else:
+                        #print(histreturn.shape,df["Hists"].shape)
+                        histreturn=pd.concat((histreturn,df["Hists"]))
+                    #print(ichunk,histreturn.shape,df["Hists"].shape)
+                    #if fillH:
+                     #   self.FillHist(df["Hists"],ds)
                     self.timing["Histograms Filled"]=(time.time())
             
                     pbar.update(1)
-                    if ichunk==0:
+                    if isinstance(timingagg,type(None)):
                         timingagg=self.timing
                     else:
                         for benchmark in self.timing:
                             timingagg[benchmark]+=self.timing[benchmark]
-                print("Timing...")
-                for benchmark in timingagg:
-                    print ("\t",benchmark,timingagg[benchmark]-timingagg["Start"])
-                print ("Dataset:",ds,"Completed")
-                print ("Events input:",self.cutflow[ds][0],"output:",self.cutflow[ds][1])
-            return(self.hists)
+                if self.verbose:
+                    print("Timing...")
+                    for benchmark in timingagg:
+                        print ("\t",benchmark,timingagg[benchmark]-timingagg["Start"])
+                    print ("Dataset:",ds,"Completed")
+                    print ("Events input:",self.cutflow[ds][0],"output:",self.cutflow[ds][1])
+            return(histreturn,timingagg)
 def PInitDir(path):
     filedict=OrderedDict()
     folders = os.listdir(path)
@@ -280,7 +327,7 @@ class PNanotoDataFrame():
         for ffi in self.fileset:
             curpath=self.path+self.dirname+"/"+ffi
             Path(curpath).mkdir(parents=True, exist_ok=False)
-
+            print ("Converting set",ffi)
             if self.nproc>1:
 
                 pool = mp.Pool(self.nproc)
@@ -293,7 +340,7 @@ class PNanotoDataFrame():
 
             else:
                 self.Convert(ffi,self.fileset[ffi])
-            print ("Converting set",ffi)
+
     
             
 
@@ -318,13 +365,14 @@ class PNanotoDataFrame():
             disable=False
             if (self.nproc>1):
                 disable=True
-            with tqdm(total=(nfiles), disable=disable) as pbar:
+            with tqdm(total=(nfiles*len(self.branches))) as pbar:
                 with tqdm(total=(fpcproc), disable=disable)  as pbar1:
                         bdict=OrderedDict([("",self.branches)])
                         if isinstance(self.branches,OrderedDict) or isinstance(self.branches,dict):
                             bdict=self.branches
                         
                         for ibmaj,bmaj in enumerate(bdict):
+                            pbar.desc="Set:"+setname+" Collection:"+bmaj+" Process:"+str(proc)
                             scalar=False
                             if self.maxind!=None:   
                                 if (self.maxind[bmaj]==None):
@@ -338,39 +386,47 @@ class PNanotoDataFrame():
                             if not scalar:
                                 if self.atype=="flat": 
                                     brancharr.append("n"+bmaj)
+                            #if bmaj!="":
+                             #   brancharr.append("event")
+                            fullout=pd.DataFrame()
                             for ibatch,batch in enumerate(uproot3.pandas.iterate(path=filearr,flatten=flatten,treepath="Events", branches=brancharr,entrysteps=float("inf"))):
                                     if self.maxind!=None:
                                         idx = pd.IndexSlice
+                                       
                                         if scalar:
                                             batch['subentry'] = batch.groupby(level=0).cumcount()
                                             batch=batch.set_index('subentry', append=True)
                                         else:
                                             batch=batch.loc[idx[:,:self.maxind[bmaj]],idx[:]]
+                                        
                                     if self.atype=="pandas":
                                         batch=batch.reset_index()
-                                    if reset:
-                                        fullout = batch
-                                        reset=False
-                                    else:
-                                        fullout = pd.concat((fullout,batch))
+                                  
+                                    fullout = pd.concat((fullout,batch))
+
                                     if (ibatch%fpcproc==0 and (ibatch>0)) or (ibatch==(nfiles-1)):
-                                        if (self.nproc>1):
-                                            print("Process",proc,": Collection:",bmaj,ibatch+1,"/",nfiles)
+
                                         fname=curpath+"/"+setname+"_"+str(proc)+"_Chunk"+str(nchunk+1)+"of"+str(nchunks)+".parquet"
-                                 
+
+
                                         if self.atype=="awk": 
                                             fullout=(pa.table(fullout))
                                         if (self.filetype=="parquet"):
-                                            if self.atype=="awk": 
+                                            if self.atype=="awk":
                                                 pq.write_table(fullout,fname)
                                             else:
 
                                                 if self.atype=="flat": 
+ 
                                                     if ibmaj>0:
                                                         loaded=pd.read_parquet(fname)
-                                                        fullout=pd.concat([fullout,loaded], axis=1)
+                                                        fullout=pd.concat([fullout,loaded], axis=1,verify_integrity=True)
                                                        
+                                                    for col in fullout:
+                                                        if fullout[col].isnull().values.all():
+                                                            raise ValueError("Empty DataFrame",col,fullout)
                                                     fullout.to_parquet(fname)
+                                                    fullout=pd.DataFrame()
                                                 if self.atype=="pandas": 
                                                     fullout.to_parquet(fname)
                                             reset=True
@@ -382,11 +438,10 @@ class PNanotoDataFrame():
                                                 pbar1.refresh() 
                                                 pbar1.reset() 
                                         nchunk+=1
-                                    if (self.nproc==1):
-                                        pbar.update(1)
+                                    pbar.update(1)
 
-                                        pbar1.update(1)
-                                        pbar1.update(0)
+                                    pbar1.update(1)
+                                    pbar1.update(0)
                                     totf+=1     
              
 

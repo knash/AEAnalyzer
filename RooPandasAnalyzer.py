@@ -1,4 +1,4 @@
-from RooPandasFunctions import PSequential,PColumn,PFilter,PRow,PProcessor,PInitDir
+from RooPandasFunctions import PSequential,PColumn,PFilter,PRow,PProcessor,PProcRunner,PInitDir
 import pandas as pd
 from glob import glob
 from ROOT import TH1F,TLorentzVector,TFile
@@ -43,7 +43,7 @@ class KinematicSelection():
 
         #njetcut is a elementwise selection used as  input to C1.  If you want to use this as an event filter, add [:,0] like in HLT selection below
         njetcut=df["FatJet"]["nFatJet"]>1
-    
+        #print(df["FatJet"])
         #passing None out of Filter will skip the entire current file (to avoid index errors)
         if (not njetcut.any()):
             return None
@@ -52,6 +52,8 @@ class KinematicSelection():
 
         #Triggers are already stored as bools
         C2=df["HLT"]["PFHT900"][:,0]
+        if (not (C1 & C2).any()):
+            return None
         return ( C1 & C2 )
 
 #PColumn function
@@ -153,9 +155,12 @@ myana=  [
 evcont={"msescale":{"TT":1.10,"QCD_HT1500to2000":0.9}}
 
 #The processor just takes in all the peices
-proc=PProcessor(chunklist,histos,branchestoread,myana,nproc=1,eventcontainer=evcont,atype="flat",scalars=scalars)
+proc=PProcessor(chunklist,histos,branchestoread,myana,eventcontainer=evcont,atype="flat",scalars=scalars)
+#proc.Run()
+
+Mproc=PProcRunner(proc,1)
 #Then runs them
-proc.Run()
+Mproc.Run()
 
 #Finally, write out the histograms
 output = TFile("FromFlatPandas.root","recreate")
