@@ -1,7 +1,7 @@
 from RooPandasFunctions import PSequential,PColumn,PFilter,PRow,PProcessor,PProcRunner,PInitDir
 import pandas as pd
 from glob import glob
-from ROOT import TH1F,TLorentzVector,TFile
+from ROOT import TH1F,TH2F,TLorentzVector,TFile
 from collections import OrderedDict
 import numpy as np
 import copy
@@ -13,6 +13,8 @@ chunklist =PInitDir("RooFlatFull")
 #Histograms are stored as a dict, and accessed through matching dict keys and DataFrame labels
 histostemp=OrderedDict  ([
                         ("invm",TH1F("invm","invm",100,0,5000)),
+                        #2D histogram.  parse variables with a "__" delimeter
+                        ("invm__logMSE",TH2F("invm__logMSE","invm__logMSE",100,0,5000,80,-20,0)),
                         ("deta",TH1F("deta","deta",50,0,5.0)),
                         ("mindetaak4",TH1F("mindetaak4","mindetaak4",50,0,5.0)),
                         ("logMSE",TH1F("logMSE","logMSE",80,-20,0)),

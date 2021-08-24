@@ -1,7 +1,7 @@
 from RooPandasFunctions import PSequential,PColumn,PFilter,PRow,PProcessor,PProcRunner,PInitDir
 import pandas as pd
 from glob import glob
-from ROOT import TH1F,TLorentzVector,TFile,TCanvas,TLegend,gPad
+from ROOT import TH1F,TH2F,TLorentzVector,TFile,TCanvas,TLegend,gPad
 from collections import OrderedDict
 import numpy as np
 import copy
@@ -17,6 +17,8 @@ histostemp=OrderedDict  ([
                         ("mindetaak4",TH1F("mindetaak4","mindetaak4",50,0,5.0)),
                         ("logMSE",TH1F("logMSE","logMSE",80,-20,0)),
                         ("logMSEshift",TH1F("logMSEshift","logMSEshift",80,-20,0)),
+                        #2D histogram.  parse variables with a "__" delimeter
+                        ("invm__logMSE",TH2F("invm__logMSE","invm__logMSE",100,0,5000,80,-20,0)),
                         ("AEL0",TH1F("AEL0","AEL0",100,-10,10)),
                         ("AEL1",TH1F("AEL1","AEL1",100,-10,10)),
                         ("AEL2",TH1F("AEL2","AEL2",100,-10,10)),
@@ -79,21 +81,26 @@ class ColumnSelection():
         #The "Hists" collection is special, and holds all variables visible to the histogram filling
         df["Hists"]["deta"] = np.abs(df["FatJet"]["eta"][:,0]-df["FatJet"]["eta"][:,1])  
 
-        #Here is an example of a many-to-one operation where we loop through ak4 jets to find the closest (in eta) to the leading AK8 jet
+
+        #Here is an example of a many-to-one operation where we loop through muons to find the closest (in eta) to the leading AK8 jet
         
-        njets=df["Jet"].index.get_level_values(1).max()+1 #index+1 is number of objects 
+        njets=df["Muon"].index.get_level_values(1).max()+1 #index+1 is number of objects 
         for ii in range(njets):
-            curdiff=(np.abs(df["FatJet"]["eta"][:,0]-df["Jet"]["eta"][:,ii]))
+            curdiff=(np.abs(df["FatJet"]["eta"][:,0]-df["Muon"]["eta"][:,ii]))
             if ii==0:
                 temp=curdiff
             else:
                 temp=pd.concat([temp,curdiff],axis=1)
         df["Hists"]["mindetaak4"] = temp.min(axis=1)
 
+        df["Hists"]["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
+
+        df["Hists"]["weight"] = df["Hists"]["evweight"]
+
         #You can also drop unused columns at any time -- here we drop the  pt,eta,phi,mass columns from the fatjet collection 
         #because we have stored the lorentzector already
         df["FatJet"] = df["FatJet"].drop(["pt","eta","phi","mass"],axis=1)
-
+        return df
 
 #PRow functions.  
 #These are classes where the __call__ special function is performed in a rowwise loop
@@ -132,7 +139,7 @@ class MyAnalyzerVec():
 
 #Dict of collections and variables to read in.
 branchestoread={
-                "Jet":["pt","eta","phi","mass"],
+                "Muon":["pt","eta","phi","mass"],
                 "FatJet":["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"],
                 "HLT":["PFHT900"],
                 "":["run","luminosityBlock","event"]
@@ -158,13 +165,13 @@ myana=  [
 #But also, you can pass anthing you want as well through the eventcontainer.  
 #Here we pass some hypothetical dataset dependent MSE shift as an example.
 #Also, objects can be passed through the class __init__ for each function  
-evcont={"msescale":{"TT":1.10,"QCD_HT1500to2000":0.9}}
+evcont={"msescale":{"TT":1.10,"QCD_HT1500to2000":0.9},"lumi":(1000.0*137.65),"xsec":{"TT":0.047,"QCD_HT1500to2000":101.8},"nev":{"TT":305963.0,"QCD_HT1500to2000":10655313.0}}
 
 #The processor just takes in all the peices
 proc=PProcessor(chunklist,histos,branchestoread,myana,eventcontainer=evcont,atype="flat",scalars=scalars)
 #proc.Run()
 
-Mproc=PProcRunner(proc,1)
+Mproc=PProcRunner(proc,6)
 #Then runs them
 Mproc.Run()
 

@@ -23,7 +23,7 @@ for ffi in fnames:
 batchesperfile={"TT":3,"QCD_HT1500to2000":5}
 
 #Keep only the branches you want "Jet",["pt"] would be the branch Jet_pt in the NanoAOD
-branchestokeep=OrderedDict([("Muon",["pt","eta","phi","mass"]),("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","iAEMSE"]),("HLT",["PFHT900"]),("",["run","luminosityBlock","event"])])
+branchestokeep=OrderedDict([("Muon",["pt","eta","phi","mass"]),("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("HLT",["PFHT900"]),("",["run","luminosityBlock","event"])])
 
 #Trim out element indices you dont want (ie only keep top 5 jets etc)
 mind={"FatJet":5,"Jet":5,"Muon":5,"":None,"HLT":None}

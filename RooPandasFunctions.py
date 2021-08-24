@@ -119,13 +119,24 @@ def RunProc(Proc):
 
 def FillHist(df,hists):
         for ih,hh in enumerate(hists):
-                nent=len(df[hh])
+                if (isinstance(hists[hh],ROOT.TH2)):
+                    axes=hh.split("__")
+                    if len(axes)!=2:
+                        raise ValueError("2D histograms need to be formatted as axis1__axis2")
+                    #print("axes",axes[0],axes[1])
+                    nent=len(df[axes[0]])
+                else:
+                    nent=len(df[hh])
                 weights=array("d",[1.0]*nent)
                 if "weight" in df.keys():
                     weights=df["weight"]
                 elif hh+"__weight" in df.keys():
                     weights=df[hh+"__weight"]
-                hists[hh].FillN(nent,array("d",df[hh]),array("d",weights))
+               
+                if (isinstance(hists[hh],ROOT.TH2)):
+                    hists[hh].FillN(nent,array("d",df[axes[0]]),array("d",df[axes[1]]),array("d",weights))
+                else:
+                    hists[hh].FillN(nent,array("d",df[hh]),array("d",weights))
                     
 class PProcRunner():
     def __init__(self,Proc,nproc):

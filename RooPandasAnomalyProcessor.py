@@ -3,7 +3,7 @@ import uproot3
 import numpy as np
 import pandas as pd
 import tqdm
-from RooPandasFunctions import PNanotoDataFrame
+from RooPandasFunctions import PNanotoDataFrame,PSequential,PColumn,PFilter,PRow,PProcessor,PProcRunner,PInitDir
 from collections import OrderedDict
 import pyspark
 
@@ -17,10 +17,10 @@ fileset={}
 for ffi in fnames:
     fileset[ffi]=[ffj.replace("/eos/uscms/","root://cmsxrootd.fnal.gov///") for ffj in fnames[ffi]]
     fileset[ffi]=fileset[ffi]
-    #fileset[ffi]=fileset[ffi][:1]
+    #fileset[ffi]=fileset[ffi][:10]
 
 #This is the Nano->Parquet file reduction factor
-batchesperfile={"TT":3,"QCD_HT1500to2000":15}
+batchesperfile={"TT":3,"QCD_HT1500to2000":5}
 
 #Keep only the branches you want "Jet",["pt"] would be the branch Jet_pt in the NanoAOD
 branchestokeep=OrderedDict([("Muon",["pt","eta","phi","mass"]),("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("HLT",["PFHT900"]),("",["run","luminosityBlock","event"])])
@@ -29,8 +29,30 @@ branchestokeep=OrderedDict([("Muon",["pt","eta","phi","mass"]),("Jet",["pt","eta
 #Trim out element indices you dont want (ie only keep top 5 jets etc)
 mind={"FatJet":5,"Jet":5,"Muon":5,"":None,"HLT":None}
 
-#Run it.  nproc is the number of processors.  >1 goes into multiprocessing mode
-PNanotoDataFrame(fileset,branchestokeep,filesperchunk=batchesperfile,nproc=4,atype="flat",dirname="RooFlatFull",maxind=mind).Run()
+
+#It is possible to pass a column selection here similar to the analyzer.  
+#Clearly the syntax is overly complicated compared to the analyzer -- to improve.  
+#This is useful for skimming and calculating a value from collections that you dont want to save.
+#ex/calculate ht from ak4 jets, then drop ak4s:
+class ColumnSelection():
+    def __call__(self,df,EventInfo):
+
+            htdf=pd.DataFrame()
+            htdf["ht"]=df["Jet_pt"].groupby(level=0).sum()
+            htdf['subentry'] = 0
+            htdf.set_index('subentry', append=True, inplace=True)
+            df=pd.concat((df,htdf),axis=1)
+
+            df=df.drop(["Jet_pt","Jet_eta","Jet_phi","Jet_mass"],axis=1)
+
+            return df
+         
 
 
+skim=  [
+        PColumn(ColumnSelection()),
+       ]
+
+#Run it.  nproc is the number of processors.  >1 goes into multiprocessing model
+PNanotoDataFrame(fileset,branchestokeep,filesperchunk=batchesperfile,nproc=6,atype="flat",dirname="RooFlatFull",maxind=mind,seq=skim).Run()
 
