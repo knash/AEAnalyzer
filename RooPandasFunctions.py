@@ -22,35 +22,34 @@ import functools
 
 
 class PSequential():
-    def __init__(self,Proc,seq):
-        self.Proc=Proc
+    def __init__(self,seq):
         self.seq=seq
     def __call__(self,df,cureeventinfo):
-
+        timesummary={}
         for iseq,seq in enumerate(self.seq):
             inddict={}
-            keys=df.keys()
-            for branch in keys:
+            prekeys=df.keys()
+            for branch in prekeys:
                 inddict[branch]=(df[branch].index)
-
-            df=seq(self.Proc,df,cureeventinfo)
-            self.Proc.timing[str(iseq)+":"+str(type(seq))]=(time.time())
+            df=seq(df,cureeventinfo)
 
             if  isinstance(df,type(None)):
                 return df
+
+            postkeys=df.keys()
             if (not isinstance(seq,PFilter)):
-                for branch in keys:
-                    if (not df[branch].index.identical(inddict[branch])):
-                         raise ValueError("Only PFilter should change indexing, not",type(seq))
+                for branch in prekeys:
+                    if branch in postkeys:
+                        if (not df[branch].index.identical(inddict[branch])):
+                             raise ValueError("Only PFilter should change indexing, not",type(seq))
           
-        return(df)
+        return(df,timesummary)
 
 
-#These two could easily be combined. Mainly seperate for indexing safety
 class PFilter():
     def __init__(self,func):
         self.func=func
-    def __call__(self,Proc,df,cureeventinfo):
+    def __call__(self,df,cureeventinfo):
 
         Cond=self.func(df,cureeventinfo)
         if ((not isinstance(Cond,pd.Series)) and (not isinstance(Cond,pd.DataFrame)) and (not isinstance(Cond,type(None)))):
@@ -66,8 +65,8 @@ class PFilter():
 class PColumn():
     def __init__(self,func):
         self.func=func
-    def __call__(self,Proc,df,cureeventinfo):
-        self.func(df,cureeventinfo)
+    def __call__(self,df,cureeventinfo):
+        df=self.func(df,cureeventinfo)
         return df
 
 class PRow():
@@ -75,7 +74,7 @@ class PRow():
         self.func=func
         self.bname=bname
 
-    def __call__(self,Proc,df,cureeventinfo):
+    def __call__(self,df,cureeventinfo):
         serarr=self.func.prepdf(df)
         Serdict={}
         indices=[]
@@ -106,6 +105,7 @@ class PRow():
             
             df[dictname]=df[dictname].assign(**({cname[idname]:Serdict[cname[idname]]}))
         return df
+
 class PEventInfo():
     def __init__(self,dataset,nevents,ichunk,nevchunk,eventcontainer):
                 self.dataset=dataset
@@ -115,14 +115,18 @@ class PEventInfo():
                 self.eventcontainer=eventcontainer
 
 def RunProc(Proc):
-    
     return Proc.Run()
+
 def FillHist(df,hists):
         for ih,hh in enumerate(hists):
-                #print(df,hh)
                 nent=len(df[hh])
-                hists[hh].FillN(nent,array("d",df[hh]),array("d",[1.0]*nent))
-
+                weights=array("d",[1.0]*nent)
+                if "weight" in df.keys():
+                    weights=df["weight"]
+                elif hh+"__weight" in df.keys():
+                    weights=df[hh+"__weight"]
+                hists[hh].FillN(nent,array("d",df[hh]),array("d",weights))
+                    
 class PProcRunner():
     def __init__(self,Proc,nproc):
                 self.nproc=nproc
@@ -153,41 +157,72 @@ class PProcRunner():
 
 
                     #pool.map(allinstances)
-                    print("Running process over ",self.nproc,"processors")
+                    print("Running process over",self.nproc,"processors")
                     results = pool.map(RunProc ,[x for x in allprocs])
                     #results = [pool.apply_async(RunProc for CProc in allprocs)]
                     print("Done")
 
                     pool.close()    
-
+                    timetot={}
+                    cutflowtot={}
                     resarr = results
-                    #print (resarr)
-                    for rr in resarr:
-                        #print (rr)
+                    for ir,rr in enumerate(resarr):
                         for ds in rr:
-                                FillHist(rr[ds][0],self.Proc.hists[ds])
-                    #self.Proc.hists=
+   
+                            FillHist(rr[ds][0],self.Proc.hists[ds])
+                            if ir==0:
+                                timetot[ds]={}
+                                for benchmark in rr[ds][1]:
+                                    timetot[ds][benchmark]=rr[ds][1][benchmark]-rr[ds][1]["Start"]
+                                cutflowtot[ds]=rr[ds][2]
+                            else:
+                                for benchmark in (timetot[ds]):
+                                    timetot[ds][benchmark]=max(rr[ds][1][benchmark]-rr[ds][1]["Start"],timetot[ds][benchmark])
+                                for cc in range(len(cutflowtot[ds])):
+                                    cutflowtot[ds][cc]+=rr[ds][2][cc]
+
+                    
+                    for ds in cutflowtot:
+                            print("Timing...")
+
+                            for benchmark in timetot[ds]:
+                                print ("\t",benchmark,timetot[ds][benchmark])
+                            print ("Dataset:",ds,"Completed")
+                            print ("Events input:",cutflowtot[ds][0],"output:",cutflowtot[ds][1])
+
             else:
                     runout=self.Proc.Run(crange)
-                    #print(runout)
-                    #print(self.Proc.hists)
+                    timetot={}
+                    cutflowtot={}
                     for ds in runout:
                         FillHist(runout[ds][0],self.Proc.hists[ds])
+                        timetot[ds]={}
+                        for benchmark in runout[ds][1]:
+                            timetot[ds][benchmark]=runout[ds][1][benchmark]-runout[ds][1]["Start"]
+                        cutflowtot[ds]=runout[ds][2]
+                    for ds in cutflowtot:
+                            print("Timing...")
+
+                            for benchmark in timetot[ds]:
+                                print ("\t",benchmark,timetot[ds][benchmark])
+                            print ("Dataset:",ds,"Completed")
+                            print ("Events input:",cutflowtot[ds][0],"output:",cutflowtot[ds][1])
+
+
             print("Total time",time.time()-fulltime)
 
 
 class PProcessor():
-    def __init__(self,files,hists,branches,sequence,branchname="Dataset",proc=1,atype="flat",eventcontainer={},scalars=[],verbose=True):
+    def __init__(self,files,hists,branches,sequence,proc=1,atype="flat",eventcontainer={},scalars=[],verbose=True):
         self.files=files
         self.hists=hists 
         self.scalars=scalars 
         self.branches=branches  
-        self.branchname=branchname    
         self.proc=proc 
         self.cutflow={}
         self.atype=atype
         self.eventcontainer=eventcontainer
-        self.ana=PSequential(self,sequence)
+        self.ana=PSequential(sequence)
         self.verbose=verbose
         self.timing={}
 
@@ -203,12 +238,11 @@ class PProcessor():
             returnval[ds]=self.RunChunks(ds,selfiles)
         if self.verbose:
             print ("Execution time",time.time()-STtime)
-        #print(hists)
         return (returnval)
 
     def RunChunks(self,ds,selfiles):
-
-            self.cutflow[ds]=[0,0]
+                
+            self.cutflow=[0,0]
             if self.verbose:
                 print ("-"*20)
                 print ("Dataset:",ds,"Started")
@@ -264,17 +298,21 @@ class PProcessor():
                     prekeys=df.keys()
                     nevchunk=df[""].shape[0]
                    
-                    self.cutflow[ds][0]+= nevchunk
+                    self.cutflow[0]+= nevchunk
                     
-                    cureeventinfo=PEventInfo(ds,self.cutflow[ds][0],ichunk,nevchunk,self.eventcontainer)
+                    cureeventinfo=PEventInfo(ds,self.cutflow[0],ichunk,nevchunk,self.eventcontainer)
                     self.timing["Parsed"]=(time.time())
-                    df = self.ana(df,cureeventinfo)
+                    retval=self.ana(df,cureeventinfo)
+                    df = retval[0]
+                    timing = retval[1]
+                    for tt in timing:
+                        self.timing[tt]=timing[tt]
                     if  isinstance(df,type(None)):
                             print("Skip",ichunk)
                             pbar.update(1)
                             continue
                     self.timing["Analyzed"]=(time.time())
-                    self.cutflow[ds][1]+= df[""].shape[0]
+                    self.cutflow[1]+= df[""].shape[0]
                     eventlist=df[""]["event"].values
                     for branch in prekeys:
                             if branch!="":
@@ -284,26 +322,17 @@ class PProcessor():
                     if ichunk==0:
                         histreturn=df["Hists"]
                     else:
-                        #print(histreturn.shape,df["Hists"].shape)
                         histreturn=pd.concat((histreturn,df["Hists"]))
-                    #print(ichunk,histreturn.shape,df["Hists"].shape)
-                    #if fillH:
-                     #   self.FillHist(df["Hists"],ds)
-                    self.timing["Histograms Filled"]=(time.time())
             
                     pbar.update(1)
+
                     if isinstance(timingagg,type(None)):
                         timingagg=self.timing
                     else:
                         for benchmark in self.timing:
                             timingagg[benchmark]+=self.timing[benchmark]
-                if self.verbose:
-                    print("Timing...")
-                    for benchmark in timingagg:
-                        print ("\t",benchmark,timingagg[benchmark]-timingagg["Start"])
-                    print ("Dataset:",ds,"Completed")
-                    print ("Events input:",self.cutflow[ds][0],"output:",self.cutflow[ds][1])
-            return(histreturn,timingagg)
+            return(histreturn,timingagg,self.cutflow)
+
 def PInitDir(path):
     filedict=OrderedDict()
     folders = os.listdir(path)
@@ -311,7 +340,7 @@ def PInitDir(path):
         filedict[ff] = sorted(glob(path+"/"+ff+"/*"))
     return(filedict)
 class PNanotoDataFrame():
-    def __init__(self,fileset,branches,maxind=None,filesperchunk=5,filetype="parquet",path="./",nproc=1,atype="pandas",dirname="RooPandas"):
+    def __init__(self,fileset,branches,maxind=None,filesperchunk=5,filetype="parquet",path="./",nproc=1,atype="pandas",dirname="RooPandas",seq=None):
         self.fileset=fileset
         self.branches=branches
         self.filesperchunk=filesperchunk
@@ -321,8 +350,8 @@ class PNanotoDataFrame():
         self.atype=atype
         self.dirname=dirname
         self.maxind=maxind
+        self.seq=seq
     def Run(self):
-
 
         for ffi in self.fileset:
             curpath=self.path+self.dirname+"/"+ffi
@@ -351,7 +380,7 @@ class PNanotoDataFrame():
 
             reset=True
             nfiles=len(filearr)
-            #print(proc,nfiles,filearr)
+
 
             if isinstance(self.filesperchunk,int):
                 fpcproc=self.filesperchunk
@@ -370,7 +399,7 @@ class PNanotoDataFrame():
                         bdict=OrderedDict([("",self.branches)])
                         if isinstance(self.branches,OrderedDict) or isinstance(self.branches,dict):
                             bdict=self.branches
-                        
+                        loaded={}
                         for ibmaj,bmaj in enumerate(bdict):
                             pbar.desc="Set:"+setname+" Collection:"+bmaj+" Process:"+str(proc)
                             scalar=False
@@ -386,9 +415,8 @@ class PNanotoDataFrame():
                             if not scalar:
                                 if self.atype=="flat": 
                                     brancharr.append("n"+bmaj)
-                            #if bmaj!="":
-                             #   brancharr.append("event")
                             fullout=pd.DataFrame()
+
                             for ibatch,batch in enumerate(uproot3.pandas.iterate(path=filearr,flatten=flatten,treepath="Events", branches=brancharr,entrysteps=float("inf"))):
                                     if self.maxind!=None:
                                         idx = pd.IndexSlice
@@ -401,13 +429,14 @@ class PNanotoDataFrame():
                                         
                                     if self.atype=="pandas":
                                         batch=batch.reset_index()
-                                  
+
                                     fullout = pd.concat((fullout,batch))
 
                                     if (ibatch%fpcproc==0 and (ibatch>0)) or (ibatch==(nfiles-1)):
 
                                         fname=curpath+"/"+setname+"_"+str(proc)+"_Chunk"+str(nchunk+1)+"of"+str(nchunks)+".parquet"
-
+                                        if not nchunk in loaded.keys():
+                                            loaded[nchunk]=pd.DataFrame()
 
                                         if self.atype=="awk": 
                                             fullout=(pa.table(fullout))
@@ -418,14 +447,18 @@ class PNanotoDataFrame():
 
                                                 if self.atype=="flat": 
  
-                                                    if ibmaj>0:
-                                                        loaded=pd.read_parquet(fname)
-                                                        fullout=pd.concat([fullout,loaded], axis=1,verify_integrity=True)
-                                                       
-                                                    for col in fullout:
-                                                        if fullout[col].isnull().values.all():
-                                                            raise ValueError("Empty DataFrame",col,fullout)
-                                                    fullout.to_parquet(fname)
+                                                    loaded[nchunk]=pd.concat([fullout,loaded[nchunk]], axis=1)
+                                                    #print(loaded[nchunk].columns)
+                                                    for col in loaded[nchunk]:
+                                                        if loaded[nchunk][col].isnull().values.all():
+                                                            raise ValueError("Empty DataFrame",col,loaded[nchunk])
+                                                    if ibmaj==len(bdict)-1:
+                                                        if self.seq!=None:
+                                                            print(loaded[nchunk].columns)
+                                                            (loaded[nchunk],_)=PSequential(self.seq)(loaded[nchunk],None)
+                                                            #print(fullout.columns)
+                                                            loaded[nchunk].to_parquet(fname)
+                                        
                                                     fullout=pd.DataFrame()
                                                 if self.atype=="pandas": 
                                                     fullout.to_parquet(fname)
