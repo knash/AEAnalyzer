@@ -20,15 +20,17 @@ for ffi in fnames:
     #fileset[ffi]=fileset[ffi][:1]
 
 #This is the Nano->Parquet file reduction factor
-batchesperfile={"TT":5,"QCD_HT1500to2000":15}
+batchesperfile={"TT":3,"QCD_HT1500to2000":15}
 
 #Keep only the branches you want "Jet",["pt"] would be the branch Jet_pt in the NanoAOD
-branchestokeep=OrderedDict([("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("HLT",["PFHT900"]),("",["run","luminosityBlock","event"])])
+branchestokeep=OrderedDict([("Muon",["pt","eta","phi","mass"]),("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("HLT",["PFHT900"]),("",["run","luminosityBlock","event"])])
+
 
 #Trim out element indices you dont want (ie only keep top 5 jets etc)
-mind={"FatJet":5,"Jet":5,"Muon":1,"":None,"HLT":None}
+mind={"FatJet":5,"Jet":5,"Muon":5,"":None,"HLT":None}
 
 #Run it.  nproc is the number of processors.  >1 goes into multiprocessing mode
 PNanotoDataFrame(fileset,branchestokeep,filesperchunk=batchesperfile,nproc=4,atype="flat",dirname="RooFlatFull",maxind=mind).Run()
+
 
 
