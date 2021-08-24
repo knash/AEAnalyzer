@@ -1,7 +1,7 @@
 from RooPandasFunctions import PSequential,PColumn,PFilter,PRow,PProcessor,PProcRunner,PInitDir
 import pandas as pd
 from glob import glob
-from ROOT import TH1F,TLorentzVector,TFile
+from ROOT import TH1F,TLorentzVector,TFile,TCanvas,TLegend,gPad
 from collections import OrderedDict
 import numpy as np
 import copy
@@ -16,7 +16,13 @@ histostemp=OrderedDict  ([
                         ("deta",TH1F("deta","deta",50,0,5.0)),
                         ("mindetaak4",TH1F("mindetaak4","mindetaak4",50,0,5.0)),
                         ("logMSE",TH1F("logMSE","logMSE",80,-20,0)),
-                        ("logMSEshift",TH1F("logMSEshift","logMSEshift",80,-20,0))
+                        ("logMSEshift",TH1F("logMSEshift","logMSEshift",80,-20,0)),
+                        ("AEL0",TH1F("AEL0","AEL0",100,-10,10)),
+                        ("AEL1",TH1F("AEL1","AEL1",100,-10,10)),
+                        ("AEL2",TH1F("AEL2","AEL2",100,-10,10)),
+                        ("AEL3",TH1F("AEL3","AEL3",100,-10,10)),
+                        ("AEL4",TH1F("AEL4","AEL4",100,-10,10)),
+                        ("AEL5",TH1F("AEL5","AEL5",100,-10,10))
                         ])
 for hist in histostemp:
     histostemp[hist].Sumw2() 
@@ -113,21 +119,21 @@ class MyAnalyzerVec():
     #Another example of a rowwise action.  This will be likely replaced with the full analysis logic.
     #Here, we prepare the leading two jet invariant mass and MSE for plotting
     def prepdf(self,df):
-        args = [df["FatJet"]["LV"][:,0],df["FatJet"]["LV"][:,1],df["FatJet"]["iAEMSE"][:,0]] 
+        args = [df["FatJet"]["LV"][:,0],df["FatJet"]["LV"][:,1],df["FatJet"]["iAEMSE"][:,0],df["FatJet"]["iAEL0"][:,0],df["FatJet"]["iAEL1"][:,0],df["FatJet"]["iAEL2"][:,0],df["FatJet"]["iAEL3"][:,0],df["FatJet"]["iAEL4"][:,0],df["FatJet"]["iAEL5"][:,0]] 
         return args
     def __call__(self,args,EventInfo):
-        (LV0,LV1,MSE)=args
+        (LV0,LV1,MSE,AE_LV1,AE_LV2,AE_LV3,AE_LV4,AE_LV5,AE_LV6)=args
         invm=(LV0 + LV1).M() 
 
         #This is where I can access the fake MSE shift object that was passed to the processor below
         msescale=EventInfo.eventcontainer["msescale"][EventInfo.dataset]
 
-        return (invm,np.log(MSE),np.log(MSE*msescale))
+        return (invm,np.log(MSE),np.log(MSE*msescale),AE_LV1,AE_LV2,AE_LV3,AE_LV4,AE_LV5,AE_LV6)
 
 #Dict of collections and variables to read in.
 branchestoread={
                 "Jet":["pt","eta","phi","mass"],
-                "FatJet":["pt","eta","phi","mass","msoftdrop","iAEMSE"],
+                "FatJet":["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"],
                 "HLT":["PFHT900"],
                 "":["run","luminosityBlock","event"]
                 }
@@ -144,7 +150,7 @@ myana=  [
         #PColumn just takes in a function that outputs a new dataframe
         PColumn(ColumnSelection()),
         #The collection here is "Hists" so we can plot these variables 
-        PRow([["Hists","invm"],["Hists","logMSE"],["Hists","logMSEshift"]],MyAnalyzerVec())
+        PRow([["Hists","invm"],["Hists","logMSE"],["Hists","logMSEshift"],["Hists","AEL0"],["Hists","AEL1"],["Hists","AEL2"],["Hists","AEL3"],["Hists","AEL4"],["Hists","AEL5"]],MyAnalyzerVec())
         ]
 
 
@@ -168,6 +174,22 @@ output.cd()
 for ds in histos:
     for var in histos[ds]:
             histos[ds][var].Write(ds+"__"+var)
+
+canv=TCanvas("canv","canv",700,500)
+gPad.SetLeftMargin(0.12)
+histos["QCD_HT1500to2000"]["invm"].SetLineColor(2)
+histos["QCD_HT1500to2000"]["invm"].SetTitle(";mass(GeV);events")
+histos["QCD_HT1500to2000"]["invm"].SetStats(0) 
+histos["QCD_HT1500to2000"]["invm"].Draw("hist")
+histos["TT"]["invm"].SetLineColor(1)   
+histos["TT"]["invm"].Draw("histsame")
+leg = TLegend(0.65, 0.65, 0.84, 0.84)
+leg.SetFillColor(0)
+leg.SetBorderSize(0)
+leg.AddEntry(histos["TT"]["invm"],"TTbar","L")
+leg.AddEntry(histos["QCD_HT1500to2000"]["invm"],"QCD","L")
+leg.Draw()
+canv.Write()
 output.Close()
 
 
