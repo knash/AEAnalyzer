@@ -13,6 +13,8 @@ chunklist =PInitDir("RooFlatFull")
 #Histograms are stored as a dict, and accessed through matching dict keys and DataFrame labels
 histostemp=OrderedDict  ([
                         ("invm",TH1F("invm","invm",100,0,5000)),
+                        ("pt",TH1F("pt","pt",100,0,2000)),
+                        ("Et",TH1F("Et","Et",100,0,5000)),
                         #2D histogram.  parse variables with a "__" delimeter
                         ("invm__logMSE",TH2F("invm__logMSE","invm__logMSE",100,0,5000,80,-20,0)),
                         ("deta",TH1F("deta","deta",50,0,5.0)),
@@ -62,10 +64,51 @@ class KinematicSelection():
         return ( C1 & C2 )
 
 
+#PColumn function  
+#creates an Et histogram before the filter (more entries)
+class ColumnSelectionPre():
+    def __call__(self,df,EventInfo):
+        #Examples of columnwise actions. 
+        #We can define a new collection variable (one item per entry).  Here we make fatjet et out of pt and mass
+        df["FatJet"]["Et"]=np.sqrt(df["FatJet"]["pt"]*df["FatJet"]["pt"]+df["FatJet"]["mass"]*df["FatJet"]["mass"])
+        df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
+
+        #this creates the generic histrogram weights by taking the event weight and projecting to the event size
+
+            
+        EventInfo.eventcontainer["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
+
+
+
+        #the  "weight" specific key will be used to weight all histograms unless there exists a histname__weight entry in the "Hists" dict
+        #It is initialized as 1, so additional weights are multiplicative 
+        df["Hists"]["weight"] *= EventInfo.eventcontainer["evweight"]
+        df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
+       
+
+        return df
+
+#one way to set the weights.  In general, each histogram needs a corresponding weights.
+#Until we have all weights, we  just project the event weights to each histogram.
+#You can skip this step and it will be done at histogram filling time automatically, but will be much slower and print a warning
+#Probably need to find a better way to do this 
+class ColumnWeights():
+    def __call__(self,df,EventInfo):
+        keys=list(df["Hists"].keys())
+        for hh in keys:
+            if hh in ["invm__logMSE","event","weight"]:
+                continue
+            df["Hists"][hh+"__weight"]=df["Hists"]["weight"]
+            if (df["Hists"][hh].index.nlevels > df["Hists"]["weight"].index.nlevels )  :
+                df["Hists"][hh]=df["Hists"][hh].droplevel(level=1)
+            df["Hists"][hh+"__weight"] = df["Hists"][hh+"__weight"][df["Hists"][hh+"__weight"].index.isin(df["Hists"][hh].index)]
+        df["Hists"]["invm__logMSE__weight"]=df["Hists"]["invm__weight"]
+        return df
+
 #PColumn function
 class ColumnSelection():
     def __call__(self,df,EventInfo):
-        #Examples of columnwise actions. The dataframe is modified inplace 
+        #Examples of columnwise actions. 
         #We can define a new collection variable (one item per entry).  Here we make fatjet et out of pt and mass
         df["FatJet"]["Et"]=np.sqrt(df["FatJet"]["pt"]*df["FatJet"]["pt"]+df["FatJet"]["mass"]*df["FatJet"]["mass"])
 
@@ -78,7 +121,7 @@ class ColumnSelection():
         #We can also define variables for plotting.  Here, deta refers to the histogram above. 
         #The "Hists" collection is special, and holds all variables visible to the histogram filling
         df["Hists"]["deta"] = np.abs(df["FatJet"]["eta"][:,0]-df["FatJet"]["eta"][:,1])  
-
+        df["Hists"]["pt"] = df["FatJet"]["pt"][:,0]  
         #Here is an example of a many-to-one operation where we loop through muons to find the closest (in eta) to the leading AK8 jet
         
         njets=df["Muon"].index.get_level_values(1).max()+1 #index+1 is number of objects 
@@ -90,9 +133,8 @@ class ColumnSelection():
                 temp=pd.concat([temp,curdiff],axis=1)
         df["Hists"]["mindetaak4"] = temp.min(axis=1)
 
-        df["Hists"]["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
-
-        df["Hists"]["weight"] = df["Hists"]["evweight"]
+        #df["Hists"]["weight"] *= EventInfo.eventcontainer["evweight"]
+        #print(df["Hists"]["weight"])
         #You can also drop unused columns at any time -- here we drop the  pt,eta,phi,mass columns from the fatjet collection 
         #because we have stored the lorentzector already
         df["FatJet"] = df["FatJet"].drop(["pt","eta","phi","mass"],axis=1)
@@ -145,6 +187,8 @@ scalars=["","HLT"]
 
 #The analysis is defined here as a sequential list of actions
 myana=  [
+
+        PColumn(ColumnSelectionPre()),
         #PFilter just takes in a function that outputs a series of bools
         PFilter(KinematicSelection(200.,50.)),
         #PRow takes in two elements.  
@@ -154,6 +198,7 @@ myana=  [
         PColumn(ColumnSelection()),
         #The collection here is "Hists" so we can plot these variables 
         PRow([["Hists","invm"],["Hists","logMSE"],["Hists","logMSEshift"]],MyAnalyzerVec()),
+        PColumn(ColumnWeights()),
         ]
 
 

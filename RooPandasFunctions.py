@@ -19,8 +19,7 @@ import itertools
 import xarray as xa
 import copy 
 import functools
-
-
+import warnings
 class PSequential():
     def __init__(self,seq):
         self.seq=seq
@@ -30,19 +29,22 @@ class PSequential():
             inddict={}
             prekeys=df.keys()
             for branch in prekeys:
-                inddict[branch]=(df[branch].index)
+                if isinstance(df[branch],pd.DataFrame):
+                    inddict[branch]=(df[branch].index)
+            #print(type(seq))
             df=seq(df,cureeventinfo)
 
             if  isinstance(df,type(None)):
                 return df
-
+    
             postkeys=df.keys()
             if (not isinstance(seq,PFilter)):
                 for branch in prekeys:
-                    if branch in postkeys:
-                        if (not df[branch].index.identical(inddict[branch])):
-                             raise ValueError("Only PFilter should change indexing, not",type(seq))
-          
+                    if isinstance(df[branch],pd.DataFrame):
+                        if branch in postkeys:
+                            if (not df[branch].index.identical(inddict[branch])):
+                                 raise ValueError("Only PFilter should change indexing, not",type(seq))
+              
         return(df,timesummary)
 
 
@@ -59,7 +61,14 @@ class PFilter():
         if (Cond.index.nlevels)>1:
             Cond= Cond.droplevel(level=1)
         for branch in df:
-            df[branch]=df[branch][df[branch].index.get_level_values(0).isin(Cond[Cond].index,level=0)]
+            if isinstance(df[branch],pd.DataFrame):
+                df[branch]=df[branch][df[branch].index.get_level_values(0).isin(Cond[Cond].index,level=0)]
+            if branch=="Hists":
+                #print("pre")
+                #print(df[branch]["event"])
+                df[branch]["event"]=df[branch]["event"][df[branch]["event"].index.get_level_values(0).isin(Cond[Cond].index,level=0)]
+                #print(df[branch]["event"])
+                #print("post")
         return df
 
 class PColumn():
@@ -83,6 +92,8 @@ class PRow():
                 indices.append(serarr[iser].index)
                 if (not indices[-1].identical(indices[0])):
                     raise ValueError("Indices must be identical when using PRow()")
+
+                
         nrows=serarr[iser].shape[0]
         indices=(serarr[0].index)
         serarrl=list(zip(*serarr))
@@ -101,9 +112,18 @@ class PRow():
             if not dictname in df:
                 df[dictname]=pd.DataFrame()  
             else:
-                Serdict[cname[idname]].index=df[dictname].index
-            
-            df[dictname]=df[dictname].assign(**({cname[idname]:Serdict[cname[idname]]}))
+                if dictname!="Hists":
+                    Serdict[cname[idname]].index=df[dictname].index
+                else:
+                    #print (Serdict[cname[idname]])
+                    Serdict[cname[idname]].index=df[dictname]["event"].index
+                    #print (Serdict[cname[idname]])
+            if isinstance(df[dictname],dict):
+                #print (Serdict)
+                df[dictname][cname[idname]]=pd.DataFrame({cname[idname]:Serdict[cname[idname]]})
+
+            else:
+                df[dictname]=df[dictname].assign(**({cname[idname]:Serdict[cname[idname]]}))
         return df
 
 class PEventInfo():
@@ -123,20 +143,32 @@ def FillHist(df,hists):
                     axes=hh.split("__")
                     if len(axes)!=2:
                         raise ValueError("2D histograms need to be formatted as axis1__axis2")
-                    #print("axes",axes[0],axes[1])
-                    nent=len(df[axes[0]])
+                    
                 else:
-                    nent=len(df[hh])
+                    axes=[hh]
+                nent=len(df[axes[0]])
                 weights=array("d",[1.0]*nent)
-                if "weight" in df.keys():
-                    weights=df["weight"]
-                elif hh+"__weight" in df.keys():
-                    weights=df[hh+"__weight"]
-               
-                if (isinstance(hists[hh],ROOT.TH2)):
-                    hists[hh].FillN(nent,array("d",df[axes[0]]),array("d",df[axes[1]]),array("d",weights))
+                for caxis in axes:
+                    if isinstance(df[caxis],pd.Series):
+                        df[caxis]=pd.DataFrame({caxis:df[caxis]})
+                        if (df[caxis].index.nlevels >1)  :
+                            df[caxis]=df[caxis].droplevel(level=1)
+                if not hh+"__weight" in df.keys():
+                    df[hh+"__weight"]=pd.DataFrame({hh+"__weight":df["weight"]})
                 else:
-                    hists[hh].FillN(nent,array("d",df[hh]),array("d",weights))
+                    df[hh+"__weight"]=pd.DataFrame({hh+"__weight":df[hh+"__weight"]})
+                if (df[axes[0]].index.nlevels < df[hh+"__weight"].index.nlevels )  :
+                            df[hh+"__weight"]=df[hh+"__weight"].droplevel(level=1)
+                        
+                if (len(df[hh+"__weight"])!=len(df[axes[0]])):
+                    warnings.warn("Warning: Attempting to project weights for "+hh+", this should be done in the analyzer")
+                    df[hh+"__weight"] = df[hh+"__weight"][df[hh+"__weight"].index.isin(df[axes[0]].index)]
+
+                if (isinstance(hists[hh],ROOT.TH2)):
+                    hists[hh].FillN(nent,array("d",df[axes[0]][axes[0]].values),array("d",df[axes[1]][axes[1]].values),array("d",df[hh+"__weight"][hh+"__weight"].values))
+                else:
+                 
+                    hists[hh].FillN(nent,array("d",df[hh][hh].values),array("d",df[hh+"__weight"][hh+"__weight"].values))
                     
 class PProcRunner():
     def __init__(self,Proc,nproc):
@@ -177,6 +209,7 @@ class PProcRunner():
                     timetot={}
                     cutflowtot={}
                     resarr = results
+                    print("Fill Hist")
                     for ir,rr in enumerate(resarr):
                         for ds in rr:
    
@@ -200,6 +233,7 @@ class PProcRunner():
                                 print ("\t",benchmark,timetot[ds][benchmark])
                             print ("Dataset:",ds,"Completed")
                             print ("Events input:",cutflowtot[ds][0],"output:",cutflowtot[ds][1])
+                    print("Done")
 
             else:
                     runout=self.Proc.Run(crange)
@@ -300,12 +334,17 @@ class PProcessor():
                             df[bmaj]=df[bmaj].rename(columns=namemap)
                             df[bmaj]=df[bmaj].dropna(how='all')
 
-                    df["Hists"]=pd.DataFrame(df[""]["event"],index=df[""].index)
-                   
-                    df[""]=df[""].droplevel(level=1)
-                    df["Hists"]=df["Hists"].droplevel(level=1)
+                    df["Hists"]={}
+                    df["Hists"]["event"]=pd.Series(df[""]["event"],index=df[""].index)
+                    df["Hists"]["weight"]=pd.Series(array("d",[1.0]*len(df[""]["event"])),index=df[""].index)
+                    
 
-             
+
+                    #print(df["Hists"])
+                    df[""]=df[""].droplevel(level=1)
+                    df["Hists"]["event"]=df["Hists"]["event"].droplevel(level=1)
+                    df["Hists"]["weight"]=df["Hists"]["weight"].droplevel(level=1)
+                    #print(df["Hists"])
                     prekeys=df.keys()
                     nevchunk=df[""].shape[0]
                    
@@ -326,14 +365,17 @@ class PProcessor():
                     self.cutflow[1]+= df[""].shape[0]
                     eventlist=df[""]["event"].values
                     for branch in prekeys:
-                            if branch!="":
+                            if branch!="" and  isinstance(df[branch],pd.DataFrame):
                                 br = df[branch]["event"].dropna().values==eventlist
                                 if not (br).all():
                                     raise ValueError("Events are not 1-to-1 in collection",branch)
                     if ichunk==0:
                         histreturn=df["Hists"]
                     else:
-                        histreturn=pd.concat((histreturn,df["Hists"]))
+                        for hh in histreturn:
+                            #print ("--")
+                            #print (hh,histreturn[hh])
+                            histreturn[hh]=pd.concat((histreturn[hh],df["Hists"][hh]))
             
                     pbar.update(1)
 

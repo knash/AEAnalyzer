@@ -64,6 +64,28 @@ class KinematicSelection():
             return None
         return ( C1 & C2 )
 
+
+class ColumnSelectionPre():
+    def __call__(self,df,EventInfo):
+        #Examples of columnwise actions. 
+        #We can define a new collection variable (one item per entry).  Here we make fatjet et out of pt and mass
+        df["FatJet"]["Et"]=np.sqrt(df["FatJet"]["pt"]*df["FatJet"]["pt"]+df["FatJet"]["mass"]*df["FatJet"]["mass"])
+        df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
+
+        #this creates the generic histrogram weights by taking the event weight and projecting to the event size
+
+            
+        EventInfo.eventcontainer["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
+
+        #the  "weight" specific key will be used to weight all histograms unless there exists a histname__weight entry in the "Hists" dict
+        #It is initialized as 1, so additional weights are multiplicative 
+        df["Hists"]["weight"] *= EventInfo.eventcontainer["evweight"]
+        df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
+       
+
+        return df
+
+
 #PColumn function
 class ColumnSelection():
     def __call__(self,df,EventInfo):
@@ -93,9 +115,6 @@ class ColumnSelection():
                 temp=pd.concat([temp,curdiff],axis=1)
         df["Hists"]["mindetaak4"] = temp.min(axis=1)
 
-        df["Hists"]["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
-
-        df["Hists"]["weight"] = df["Hists"]["evweight"]
 
         #You can also drop unused columns at any time -- here we drop the  pt,eta,phi,mass columns from the fatjet collection 
         #because we have stored the lorentzector already
@@ -137,6 +156,24 @@ class MyAnalyzerVec():
 
         return (invm,np.log(MSE),np.log(MSE*msescale),AE_LV1,AE_LV2,AE_LV3,AE_LV4,AE_LV5,AE_LV6)
 
+
+#one way to set the weights.  In general, each histogram needs a corresponding weights.
+#Until we have all weights, we  just project the event weights to each histogram.
+#You can skip this step and it will be done at histogram filling time automatically, but will be much slower and print a warning
+#Probably need to find a better way to do this 
+class ColumnWeights():
+    def __call__(self,df,EventInfo):
+        keys=list(df["Hists"].keys())
+        for hh in keys:
+            if hh in ["invm__logMSE","event","weight"]:
+                continue
+            df["Hists"][hh+"__weight"]=df["Hists"]["weight"]
+            if (df["Hists"][hh].index.nlevels > df["Hists"]["weight"].index.nlevels )  :
+                df["Hists"][hh]=df["Hists"][hh].droplevel(level=1)
+            df["Hists"][hh+"__weight"] = df["Hists"][hh+"__weight"][df["Hists"][hh+"__weight"].index.isin(df["Hists"][hh].index)]
+        df["Hists"]["invm__logMSE__weight"]=df["Hists"]["invm__weight"]
+        return df
+
 #Dict of collections and variables to read in.
 branchestoread={
                 "Muon":["pt","eta","phi","mass"],
@@ -149,6 +186,7 @@ scalars=["","HLT"]
 
 #The analysis is defined here as a sequential list of actions
 myana=  [
+        PColumn(ColumnSelectionPre()),
         #PFilter just takes in a function that outputs a series of bools
         PFilter(KinematicSelection(200.,50.)),
         #PRow takes in two elements.  
@@ -157,7 +195,8 @@ myana=  [
         #PColumn just takes in a function that outputs a new dataframe
         PColumn(ColumnSelection()),
         #The collection here is "Hists" so we can plot these variables 
-        PRow([["Hists","invm"],["Hists","logMSE"],["Hists","logMSEshift"],["Hists","AEL0"],["Hists","AEL1"],["Hists","AEL2"],["Hists","AEL3"],["Hists","AEL4"],["Hists","AEL5"]],MyAnalyzerVec())
+        PRow([["Hists","invm"],["Hists","logMSE"],["Hists","logMSEshift"],["Hists","AEL0"],["Hists","AEL1"],["Hists","AEL2"],["Hists","AEL3"],["Hists","AEL4"],["Hists","AEL5"]],MyAnalyzerVec()),
+        PColumn(ColumnWeights())
         ]
 
 
