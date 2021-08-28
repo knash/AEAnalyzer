@@ -14,12 +14,15 @@ chunklist =PInitDir("RooFlatFull")
 histostemp=OrderedDict  ([
                         ("invm",TH1F("invm","invm",100,0,5000)),
                         ("pt",TH1F("pt","pt",100,0,2000)),
+                        ("tight90pt1",TH1F("tight90pt1","tight90pt1",100,0,2000)),
+                        ("loose90pt1",TH1F("loose90pt1","loose90pt1",100,0,2000)),
                         ("Et",TH1F("Et","Et",100,0,5000)),
                         #2D histogram.  parse variables with a "__" delimeter
                         ("invm__logMSE",TH2F("invm__logMSE","invm__logMSE",100,0,5000,80,-20,0)),
                         ("deta",TH1F("deta","deta",50,0,5.0)),
                         ("mindetaak4",TH1F("mindetaak4","mindetaak4",50,0,5.0)),
                         ("logMSE",TH1F("logMSE","logMSE",80,-20,0)),
+                        ("logMSEall",TH1F("logMSEall","logMSEall",80,-20,0)),
                         ("logMSEshift",TH1F("logMSEshift","logMSEshift",80,-20,0))
                         ])
 for hist in histostemp:
@@ -74,8 +77,21 @@ class ColumnSelectionPre():
         df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
 
         #this creates the generic histrogram weights by taking the event weight and projecting to the event size
+        njetcut=df["FatJet"]["nFatJet"]==1
+        ptcut=df["FatJet"]["pt"]>200.
 
-            
+        dfsel=df["FatJet"][ptcut&njetcut]
+        #this is printed at the end.  Should chain Mprocs for general solution
+        cut90,cut99,cut999=-11.3,-9.9,-9.2
+
+        #print(cut90,EventInfo.dataset)
+        logmse=np.log(dfsel["iAEMSE"])
+        #make sure there are any events left
+        if len(dfsel["pt"][logmse>cut90])>0:
+            df["Hists"]["tight90pt1"] = dfsel["pt"][logmse>cut90][:,0]
+        if len(dfsel["pt"][logmse<cut90])>0:
+            df["Hists"]["loose90pt1"] = dfsel["pt"][logmse<cut90][:,0]
+
         EventInfo.eventcontainer["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
 
 
@@ -84,7 +100,7 @@ class ColumnSelectionPre():
         #It is initialized as 1, so additional weights are multiplicative 
         df["Hists"]["weight"] *= EventInfo.eventcontainer["evweight"]
         df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
-       
+        df["Hists"]["logMSE_all"] = np.log(df["FatJet"]["iAEMSE"])
 
         return df
 
@@ -214,8 +230,11 @@ proc=PProcessor(chunklist,histos,branchestoread,myana,eventcontainer=evcont,atyp
 #Multiprocessor 
 Mproc=PProcRunner(proc,6)
 #Then runs them
-Mproc.Run()
-
+returndf=Mproc.Run()
+for rr in returndf:
+    print  (rr ,"cut90",returndf[rr]["logMSE_all"].quantile(0.9))
+    print  (rr ,"cut99",returndf[rr]["logMSE_all"].quantile(0.99))
+    print  (rr ,"cut999",returndf[rr]["logMSE_all"].quantile(0.999))
 #Finally, write out the histograms
 output = TFile("FromFlatPandas.root","recreate")
 output.cd()

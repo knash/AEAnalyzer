@@ -25,7 +25,6 @@ batchesperfile={"TT":3,"QCD_HT1500to2000":5}
 #Keep only the branches you want "Jet",["pt"] would be the branch Jet_pt in the NanoAOD
 branchestokeep=OrderedDict([("Muon",["pt","eta","phi","mass"]),("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("HLT",["PFHT900"]),("",["run","luminosityBlock","event"])])
 
-
 #Trim out element indices you dont want (ie only keep top 5 jets etc)
 mind={"FatJet":5,"Jet":5,"Muon":5,"":None,"HLT":None}
 
@@ -36,7 +35,7 @@ mind={"FatJet":5,"Jet":5,"Muon":5,"":None,"HLT":None}
 #ex/calculate ht from ak4 jets, then drop ak4s:
 class ColumnSelection():
     def __call__(self,df,EventInfo):
-
+            if "Jet_pt" in .df
             htdf=pd.DataFrame()
             htdf["ht"]=df["Jet_pt"].groupby(level=0).sum()
             htdf['subentry'] = 0

@@ -29,6 +29,7 @@ class PSequential():
             inddict={}
             prekeys=df.keys()
             for branch in prekeys:
+                
                 if isinstance(df[branch],pd.DataFrame):
                     inddict[branch]=(df[branch].index)
             #print(type(seq))
@@ -40,8 +41,8 @@ class PSequential():
             postkeys=df.keys()
             if (not isinstance(seq,PFilter)):
                 for branch in prekeys:
-                    if isinstance(df[branch],pd.DataFrame):
-                        if branch in postkeys:
+                    if branch in postkeys:
+                        if isinstance(df[branch],pd.DataFrame):
                             if (not df[branch].index.identical(inddict[branch])):
                                  raise ValueError("Only PFilter should change indexing, not",type(seq))
               
@@ -139,6 +140,7 @@ def RunProc(Proc):
 
 def FillHist(df,hists):
         for ih,hh in enumerate(hists):
+
                 if (isinstance(hists[hh],ROOT.TH2)):
                     axes=hh.split("__")
                     if len(axes)!=2:
@@ -146,6 +148,8 @@ def FillHist(df,hists):
                     
                 else:
                     axes=[hh]
+                if not axes[0] in df:
+                    continue
                 nent=len(df[axes[0]])
                 weights=array("d",[1.0]*nent)
                 for caxis in axes:
@@ -161,7 +165,8 @@ def FillHist(df,hists):
                             df[hh+"__weight"]=df[hh+"__weight"].droplevel(level=1)
                         
                 if (len(df[hh+"__weight"])!=len(df[axes[0]])):
-                    warnings.warn("Warning: Attempting to project weights for "+hh+", this should be done in the analyzer")
+                    warnings.warn("Warning: Attempting to project weights for histogram, this should be done in the analyzer")
+                    print(hh)
                     df[hh+"__weight"] = df[hh+"__weight"][df[hh+"__weight"].index.isin(df[axes[0]].index)]
 
                 if (isinstance(hists[hh],ROOT.TH2)):
@@ -176,6 +181,7 @@ class PProcRunner():
                 self.Proc=Proc
     def Run(self,crange=None):
             fulltime=time.time()
+            histreturn={}
             if self.nproc>1:
                     pool = mp.Pool(self.nproc)
 
@@ -210,10 +216,21 @@ class PProcRunner():
                     cutflowtot={}
                     resarr = results
                     print("Fill Hist")
+
                     for ir,rr in enumerate(resarr):
                         for ds in rr:
    
                             FillHist(rr[ds][0],self.Proc.hists[ds])
+
+                            if ds in histreturn:
+                                for ph in rr[ds][0]:
+                                    if ph in histreturn[ds]:
+                                        histreturn[ds][ph]=pd.concat((histreturn[ds][ph],rr[ds][0][ph]))
+                                    else:
+                                        histreturn[ds][ph]=rr[ds][0][ph]
+                            else:
+                                histreturn[ds]={}
+
                             if ir==0:
                                 timetot[ds]={}
                                 for benchmark in rr[ds][1]:
@@ -234,12 +251,21 @@ class PProcRunner():
                             print ("Dataset:",ds,"Completed")
                             print ("Events input:",cutflowtot[ds][0],"output:",cutflowtot[ds][1])
                     print("Done")
+                    
 
             else:
                     runout=self.Proc.Run(crange)
                     timetot={}
                     cutflowtot={}
                     for ds in runout:
+
+
+                        for ph in runout[ds][0]:
+                                    if ph in histreturn[ds]:
+                                        histreturn[ds][ph]=pd.concat((histreturn[ds][ph],runout[ds][0][ph]))
+                                    else:
+                                        histreturn[ds][ph]=runout[ds][0][ph]
+
                         FillHist(runout[ds][0],self.Proc.hists[ds])
                         timetot[ds]={}
                         for benchmark in runout[ds][1]:
@@ -255,7 +281,7 @@ class PProcRunner():
 
 
             print("Total time",time.time()-fulltime)
-
+            return histreturn
 
 class PProcessor():
     def __init__(self,files,hists,branches,sequence,proc=1,atype="flat",eventcontainer={},scalars=[],verbose=True):
@@ -293,7 +319,7 @@ class PProcessor():
                 print ("Dataset:",ds,"Started")
             fillH=True
             timingagg=None
-            histreturn=None
+            histreturn={}
          
             with tqdm(total=(len(selfiles)),desc="Dataset:"+ds+" Process:"+str(self.proc)) as pbar:
                 for ichunk,chunk in enumerate(selfiles):
@@ -369,14 +395,14 @@ class PProcessor():
                                 br = df[branch]["event"].dropna().values==eventlist
                                 if not (br).all():
                                     raise ValueError("Events are not 1-to-1 in collection",branch)
-                    if ichunk==0:
-                        histreturn=df["Hists"]
-                    else:
-                        for hh in histreturn:
+                    for hh in df["Hists"]:
+
+                            if hh in histreturn:
+                                histreturn[hh]=pd.concat((histreturn[hh],df["Hists"][hh]))
+                            else:
+                                histreturn[hh]=df["Hists"][hh]
                             #print ("--")
                             #print (hh,histreturn[hh])
-                            histreturn[hh]=pd.concat((histreturn[hh],df["Hists"][hh]))
-            
                     pbar.update(1)
 
                     if isinstance(timingagg,type(None)):
@@ -507,9 +533,9 @@ class PNanotoDataFrame():
                                                             raise ValueError("Empty DataFrame",col,loaded[nchunk])
                                                     if ibmaj==len(bdict)-1:
                                                         if self.seq!=None:
-                                                            print(loaded[nchunk].columns)
+
                                                             (loaded[nchunk],_)=PSequential(self.seq)(loaded[nchunk],None)
-                                                            #print(fullout.columns)
+
                                                             loaded[nchunk].to_parquet(fname)
                                         
                                                     fullout=pd.DataFrame()
