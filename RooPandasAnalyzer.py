@@ -19,6 +19,7 @@ histostemp=OrderedDict  ([
                         ("Et",TH1F("Et","Et",100,0,5000)),
                         #2D histogram.  parse variables with a "__" delimeter
                         ("invm__logMSE",TH2F("invm__logMSE","invm__logMSE",100,0,5000,80,-20,0)),
+                        ("njettight__njetloose",TH2F("njettight__njetloose","njettight__njetloose",4,-0.5,3.5,4,-0.5,3.5)),
                         ("deta",TH1F("deta","deta",50,0,5.0)),
                         ("mindetaak4",TH1F("mindetaak4","mindetaak4",50,0,5.0)),
                         ("logMSE",TH1F("logMSE","logMSE",80,-20,0)),
@@ -86,13 +87,11 @@ class ColumnSelectionPre():
         cut90,cut99,cut999=-11.3,-9.9,-9.2
         #print(cut90,EventInfo.dataset)
         logmse=np.log(dfsel["iAEMSE"])
-        njettight=((logmse>cut90).groupby(level=0).sum())
-        njetloose=((logmse<cut90).groupby(level=0).sum())
-        #print(njetloose)
- 
-        #print(dfsel["pt"])
-        #print(((msegroup<99999.).sum()))
 
+        njettight=((logmse>cut90).sum(level=0))
+        njetloose=((logmse<cut90).sum(level=0))
+        df["Hists"]["njettight"] = njettight
+        df["Hists"]["njetloose"] = njetloose
         #this is printed at the end.  Should chain Mprocs for general solution
 
         #make sure there are any events left
@@ -123,13 +122,15 @@ class ColumnWeights():
     def __call__(self,df,EventInfo):
         keys=list(df["Hists"].keys())
         for hh in keys:
-            if hh in ["invm__logMSE","event","weight"]:
+            if hh in ["invm__logMSE","njettight__njetloose","event","weight"]:
                 continue
+            #print(hh)
             df["Hists"][hh+"__weight"]=df["Hists"]["weight"]
             if (df["Hists"][hh].index.nlevels > df["Hists"]["weight"].index.nlevels )  :
                 df["Hists"][hh]=df["Hists"][hh].droplevel(level=1)
             df["Hists"][hh+"__weight"] = df["Hists"][hh+"__weight"][df["Hists"][hh+"__weight"].index.isin(df["Hists"][hh].index)]
         df["Hists"]["invm__logMSE__weight"]=df["Hists"]["invm__weight"]
+        df["Hists"]["njettight__njetloose__weight"]=df["Hists"]["njettight__weight"]
         return df
 
 #PColumn function
