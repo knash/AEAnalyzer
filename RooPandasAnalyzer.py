@@ -81,11 +81,17 @@ class ColumnSelectionPre():
         ptcut=df["FatJet"]["pt"]>200.
 
         dfsel=df["FatJet"][ptcut]
+
+
         cut90,cut99,cut999=-11.3,-9.9,-9.2
         #print(cut90,EventInfo.dataset)
         logmse=np.log(dfsel["iAEMSE"])
-        njettight=dfsel[logmse>cut90].groupby(level=0).size()
-        njetloose=dfsel[logmse<cut90].groupby(level=0).size()
+        njettight=((logmse>cut90).groupby(level=0).sum())
+        njetloose=((logmse<cut90).groupby(level=0).sum())
+        #print(njetloose)
+ 
+        #print(dfsel["pt"])
+        #print(((msegroup<99999.).sum()))
 
         #this is printed at the end.  Should chain Mprocs for general solution
 
