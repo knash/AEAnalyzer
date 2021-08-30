@@ -77,19 +77,24 @@ class ColumnSelectionPre():
         df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
 
         #this creates the generic histrogram weights by taking the event weight and projecting to the event size
-        njetcut=df["FatJet"]["nFatJet"]==1
+        #njetcut=df["FatJet"]["nFatJet"]==1
         ptcut=df["FatJet"]["pt"]>200.
 
-        dfsel=df["FatJet"][ptcut&njetcut]
-        #this is printed at the end.  Should chain Mprocs for general solution
+        dfsel=df["FatJet"][ptcut]
         cut90,cut99,cut999=-11.3,-9.9,-9.2
-
         #print(cut90,EventInfo.dataset)
         logmse=np.log(dfsel["iAEMSE"])
+        njettight=dfsel[logmse>cut90].groupby(level=0).size()
+        njetloose=dfsel[logmse<cut90].groupby(level=0).size()
+
+        #this is printed at the end.  Should chain Mprocs for general solution
+
         #make sure there are any events left
-        if len(dfsel["pt"][logmse>cut90])>0:
+        if len(njettight)>0:
             df["Hists"]["tight90pt1"] = dfsel["pt"][logmse>cut90][:,0]
-        if len(dfsel["pt"][logmse<cut90])>0:
+            #print(dfsel["pt"][logmse>cut90])
+            #print(dfsel["pt"][logmse>cut90].groupby(level=0).size())
+        if len(njetloose)>0:
             df["Hists"]["loose90pt1"] = dfsel["pt"][logmse<cut90][:,0]
 
         EventInfo.eventcontainer["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
