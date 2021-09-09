@@ -46,8 +46,6 @@ class ColumnSelection():
 
             return df
          
-
-
 skim=  [
         PColumn(ColumnSelection()),
        ]

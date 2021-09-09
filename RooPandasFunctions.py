@@ -31,18 +31,23 @@ class PSequential():
             for branch in prekeys:
                 
                 if isinstance(df[branch],pd.DataFrame):
+                    #if branch=="FatJet":
+                    #    print(df[branch].shape)
                     inddict[branch]=(df[branch].index)
             #print(type(seq))
+
             df=seq(df,cureeventinfo)
 
             if  isinstance(df,type(None)):
                 return df
-    
+
             postkeys=df.keys()
             if (not isinstance(seq,PFilter)):
                 for branch in prekeys:
                     if branch in postkeys:
                         if isinstance(df[branch],pd.DataFrame):
+                            #if branch=="FatJet":
+                            #    print(df[branch].shape)
                             if (not df[branch].index.identical(inddict[branch])):
                                  raise ValueError("Only PFilter should change indexing, not",type(seq))
               
@@ -65,8 +70,7 @@ class PFilter():
             if isinstance(df[branch],pd.DataFrame):
                 df[branch]=df[branch][df[branch].index.get_level_values(0).isin(Cond[Cond].index,level=0)]
             if branch=="Hists":
-                #print("pre")
-                #print(df[branch]["event"])
+
                 df[branch]["event"]=df[branch]["event"][df[branch]["event"].index.get_level_values(0).isin(Cond[Cond].index,level=0)]
                 #print(df[branch]["event"])
                 #print("post")
@@ -86,6 +90,9 @@ class PRow():
 
     def __call__(self,df,cureeventinfo):
         serarr=self.func.prepdf(df)
+        if isinstance(serarr,type(None)):
+            warnings.warn("None returned from Prow")
+            return None
         Serdict={}
         indices=[]
         for iser in range(len(serarr)):
@@ -102,7 +109,7 @@ class PRow():
 
         if (len(funcapply)!=nrows):
             raise ValueError("Output must have same number of elements as the input")
-
+        #print(np.array(self.bname))
         cname=np.array(self.bname)[:,1]
         dictnames=np.array(self.bname)[:,0]
 
@@ -116,8 +123,9 @@ class PRow():
                 if dictname!="Hists":
                     Serdict[cname[idname]].index=df[dictname].index
                 else:
-                    #print (Serdict[cname[idname]])
-                    Serdict[cname[idname]].index=df[dictname]["event"].index
+                    #print (df[dictname]["event"].index)
+                    #print (Serdict[cname[idname]].index.unique())
+                    Serdict[cname[idname]].index=df[dictname]["event"].index.unique()
                     #print (Serdict[cname[idname]])
             if isinstance(df[dictname],dict):
                 #print (Serdict)
@@ -160,6 +168,9 @@ def FillHist(df,hists):
                 if not hh+"__weight" in df.keys():
                     df[hh+"__weight"]=pd.DataFrame({hh+"__weight":df["weight"]})
                 else:
+                    
+                    if isinstance(df[hh+"__weight"],pd.DataFrame):
+                        df[hh+"__weight"]=pd.Series(df[hh+"__weight"][hh+"__weight"])
                     df[hh+"__weight"]=pd.DataFrame({hh+"__weight":df[hh+"__weight"]})
                 if (df[axes[0]].index.nlevels < df[hh+"__weight"].index.nlevels )  :
                             df[hh+"__weight"]=df[hh+"__weight"].droplevel(level=1)
@@ -172,8 +183,10 @@ def FillHist(df,hists):
                 if (isinstance(hists[hh],ROOT.TH2)):
                     hists[hh].FillN(nent,array("d",df[axes[0]][axes[0]].values),array("d",df[axes[1]][axes[1]].values),array("d",df[hh+"__weight"][hh+"__weight"].values))
                 else:
-                 
-                    hists[hh].FillN(nent,array("d",df[hh][hh].values),array("d",df[hh+"__weight"][hh+"__weight"].values))
+                    #print(df[hh][hh].values)
+                    #print(df[hh+"__weight"][hh+"__weight"].values)
+                    if((len(df[hh][hh].values)>0) and (len(df[hh+"__weight"][hh+"__weight"].values)==len(df[hh][hh].values))):
+                        hists[hh].FillN(nent,array("d",df[hh][hh].values),array("d",df[hh+"__weight"][hh+"__weight"].values))
                     
 class PProcRunner():
     def __init__(self,Proc,nproc):
@@ -219,7 +232,12 @@ class PProcRunner():
 
                     for ir,rr in enumerate(resarr):
                         for ds in rr:
-   
+                            #print (rr[ds])
+                            #print (rr[ds][0])
+                            skip=False
+                            if isinstance(rr[ds][1],type(None)):
+                                print("Empty chunk")
+                                skip=True
                             FillHist(rr[ds][0],self.Proc.hists[ds])
 
                             if ds in histreturn:
@@ -230,7 +248,8 @@ class PProcRunner():
                                         histreturn[ds][ph]=rr[ds][0][ph]
                             else:
                                 histreturn[ds]={}
-
+                            if skip:
+                                continue
                             if ir==0:
                                 timetot[ds]={}
                                 for benchmark in rr[ds][1]:
@@ -259,13 +278,14 @@ class PProcRunner():
                     cutflowtot={}
                     for ds in runout:
 
-
                         for ph in runout[ds][0]:
+                            if ds in histreturn:
                                     if ph in histreturn[ds]:
                                         histreturn[ds][ph]=pd.concat((histreturn[ds][ph],runout[ds][0][ph]))
                                     else:
                                         histreturn[ds][ph]=runout[ds][0][ph]
-
+                            else:
+                                histreturn[ds]={}
                         FillHist(runout[ds][0],self.Proc.hists[ds])
                         timetot[ds]={}
                         for benchmark in runout[ds][1]:
@@ -353,8 +373,16 @@ class PProcessor():
                             if bmaj!="":
                                 if not (bmaj in self.scalars):
                                     brancharr.append("n"+bmaj)
+
                                 brancharr.append("event")
+                            #print(dffull.loc[:,'event'])
+                            dffull.loc[:,'event']=dffull.loc[:,'event'].fillna(method="ffill")
+                            #print(dffull.loc[:,'event'])
                             df[bmaj]=dffull[brancharr]
+                            #print(df[bmaj]["event"])
+                            #df[bmaj].loc[:,'event'].fillna(method="ffill", inplace = True)
+                            #df[bmaj]["event"]=df[bmaj]["event"].fillna(method="ffill")
+                            #print(df[bmaj]["event"])
                             namemap = {x:x.replace(bmaj+"_","") for x in brancharr}
 
                             df[bmaj]=df[bmaj].rename(columns=namemap)
@@ -379,20 +407,31 @@ class PProcessor():
                     cureeventinfo=PEventInfo(ds,self.cutflow[0],ichunk,nevchunk,self.eventcontainer)
                     self.timing["Parsed"]=(time.time())
                     retval=self.ana(df,cureeventinfo)
+
+                    if  isinstance(retval,type(None)):
+                            #print("Skip",ichunk)
+                            pbar.update(1)
+                            continue
+
                     df = retval[0]
+                
                     timing = retval[1]
                     for tt in timing:
                         self.timing[tt]=timing[tt]
                     if  isinstance(df,type(None)):
-                            print("Skip",ichunk)
+                            #print("Skip",ichunk)
                             pbar.update(1)
                             continue
                     self.timing["Analyzed"]=(time.time())
                     self.cutflow[1]+= df[""].shape[0]
-                    eventlist=df[""]["event"].values
+                    eventlist=df[""]["event"]
                     for branch in prekeys:
                             if branch!="" and  isinstance(df[branch],pd.DataFrame):
-                                br = df[branch]["event"].dropna().values==eventlist
+
+                                br = df[branch]["event"].unique()==eventlist.unique()
+                                #print(df[branch]["event"].unique())
+                                #print(eventlist.unique())
+                                #print(branch,br)
                                 if not (br).all():
                                     raise ValueError("Events are not 1-to-1 in collection",branch)
                     for hh in df["Hists"]:

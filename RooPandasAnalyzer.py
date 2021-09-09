@@ -27,14 +27,14 @@ histostemp=OrderedDict  ([
                         ("logMSEshift",TH1F("logMSEshift","logMSEshift",80,-20,0))
                         ])
 for hist in histostemp:
-    histostemp[hist].Sumw2() 
+    histostemp[hist].Sumw2()
 
 #This takes the histograms and makes a copy for each dataset
 histos= {}
 for ds in chunklist:
     histos[ds]=copy.deepcopy(histostemp)
 
-#The analysis uses PColumn,PFilter, and PRow actions which all take in a python function as an argument and use it 
+#The analysis uses PColumn,PFilter, and PRow actions which all take in a python function as an argument and use it
 #to efficiently analyze a DataFrame.
 
 #Here are some functions that will later be used as input to these actions
@@ -68,11 +68,11 @@ class KinematicSelection():
         return ( C1 & C2 )
 
 
-#PColumn function  
+#PColumn function
 #creates an Et histogram before the filter (more entries)
 class ColumnSelectionPre():
     def __call__(self,df,EventInfo):
-        #Examples of columnwise actions. 
+        #Examples of columnwise actions.
         #We can define a new collection variable (one item per entry).  Here we make fatjet et out of pt and mass
         df["FatJet"]["Et"]=np.sqrt(df["FatJet"]["pt"]*df["FatJet"]["pt"]+df["FatJet"]["mass"]*df["FatJet"]["mass"])
         df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
@@ -90,8 +90,15 @@ class ColumnSelectionPre():
 
         njettight=((logmse>cut90).sum(level=0))
         njetloose=((logmse<cut90).sum(level=0))
+        df["Hists"]["ht"]=dfsel["pt"].sum(level=0)
         df["Hists"]["njettight"] = njettight
         df["Hists"]["njetloose"] = njetloose
+        df["Hists"]["ht11"]=df["Hists"]["ht"][(df["Hists"]["njettight"]==1)&(df["Hists"]["njetloose"]==1)]
+        df["Hists"]["ht11"]=df["Hists"]["ht"][(df["Hists"]["njettight"]==1)&(df["Hists"]["njetloose"]==1)]
+        #print ("GO")
+        #print (df["Hists"]["ht"].shape,df["Hists"]["ht"].size)
+        #print (df["Hists"]["njettight"].shape,df["Hists"]["njettight"].size)
+        #print (dfsel.shape,dfsel.size)
         #this is printed at the end.  Should chain Mprocs for general solution
 
         #make sure there are any events left
@@ -107,7 +114,7 @@ class ColumnSelectionPre():
 
 
         #the  "weight" specific key will be used to weight all histograms unless there exists a histname__weight entry in the "Hists" dict
-        #It is initialized as 1, so additional weights are multiplicative 
+        #It is initialized as 1, so additional weights are multiplicative
         df["Hists"]["weight"] *= EventInfo.eventcontainer["evweight"]
         df["Hists"]["Et"] = df["FatJet"]["Et"][:,0]
         df["Hists"]["logMSE_all"] = np.log(df["FatJet"]["iAEMSE"])
@@ -117,7 +124,7 @@ class ColumnSelectionPre():
 #one way to set the weights.  In general, each histogram needs a corresponding weights.
 #Until we have all weights, we  just project the event weights to each histogram.
 #You can skip this step and it will be done at histogram filling time automatically, but will be much slower and print a warning
-#Probably need to find a better way to do this 
+#Probably need to find a better way to do this
 class ColumnWeights():
     def __call__(self,df,EventInfo):
         keys=list(df["Hists"].keys())
@@ -136,7 +143,7 @@ class ColumnWeights():
 #PColumn function
 class ColumnSelection():
     def __call__(self,df,EventInfo):
-        #Examples of columnwise actions. 
+        #Examples of columnwise actions.
         #We can define a new collection variable (one item per entry).  Here we make fatjet et out of pt and mass
         df["FatJet"]["Et"]=np.sqrt(df["FatJet"]["pt"]*df["FatJet"]["pt"]+df["FatJet"]["mass"]*df["FatJet"]["mass"])
 
@@ -144,15 +151,15 @@ class ColumnSelection():
 
         #We can store the leading two jet ht (one item per event) the "" collection is a key used for event-level info
         #print(df["FatJet"]["pt"])
-        df[""]["dijetht"] = df["FatJet"]["pt"][:,0]+df["FatJet"]["pt"][:,1]    
+        df[""]["dijetht"] = df["FatJet"]["pt"][:,0]+df["FatJet"]["pt"][:,1]
 
-        #We can also define variables for plotting.  Here, deta refers to the histogram above. 
+        #We can also define variables for plotting.  Here, deta refers to the histogram above.
         #The "Hists" collection is special, and holds all variables visible to the histogram filling
-        df["Hists"]["deta"] = np.abs(df["FatJet"]["eta"][:,0]-df["FatJet"]["eta"][:,1])  
-        df["Hists"]["pt"] = df["FatJet"]["pt"][:,0]  
+        df["Hists"]["deta"] = np.abs(df["FatJet"]["eta"][:,0]-df["FatJet"]["eta"][:,1])
+        df["Hists"]["pt"] = df["FatJet"]["pt"][:,0]
         #Here is an example of a many-to-one operation where we loop through muons to find the closest (in eta) to the leading AK8 jet
-        
-        njets=df["Muon"].index.get_level_values(1).max()+1 #index+1 is number of objects 
+
+        njets=df["Muon"].index.get_level_values(1).max()+1 #index+1 is number of objects
         for ii in range(njets):
             curdiff=(np.abs(df["FatJet"]["eta"][:,0]-df["Muon"]["eta"][:,ii]))
             if ii==0:
@@ -163,12 +170,12 @@ class ColumnSelection():
 
         #df["Hists"]["weight"] *= EventInfo.eventcontainer["evweight"]
         #print(df["Hists"]["weight"])
-        #You can also drop unused columns at any time -- here we drop the  pt,eta,phi,mass columns from the fatjet collection 
+        #You can also drop unused columns at any time -- here we drop the  pt,eta,phi,mass columns from the fatjet collection
         #because we have stored the lorentzector already
         df["FatJet"] = df["FatJet"].drop(["pt","eta","phi","mass"],axis=1)
         return df
 
-#PRow functions.  
+#PRow functions.
 #These are classes where the __call__ special function is performed in a rowwise loop
 class MakePtEtaPhiMLV():
     #Example of a rowwise action.  These are slower than the columnwise selections, so best to do them last.
@@ -179,7 +186,7 @@ class MakePtEtaPhiMLV():
         args = [df["FatJet"]["pt"],df["FatJet"]["eta"],df["FatJet"]["phi"],df["FatJet"]["mass"]]
         return args
 
-    #The args are then passed to the call function 
+    #The args are then passed to the call function
     def __call__(self,args,EventInfo):
         #Here, you can write general code as if you were acting on elements and not columns
         #This just takes pt,eta,phi, and mass and converts to a four vector,  This will be saved in the DataFrame and column passed below
@@ -192,11 +199,11 @@ class MyAnalyzerVec():
     #Another example of a rowwise action.  This will be likely replaced with the full analysis logic.
     #Here, we prepare the leading two jet invariant mass and MSE for plotting
     def prepdf(self,df):
-        args = [df["FatJet"]["LV"][:,0],df["FatJet"]["LV"][:,1],df["FatJet"]["iAEMSE"][:,0]] 
+        args = [df["FatJet"]["LV"][:,0],df["FatJet"]["LV"][:,1],df["FatJet"]["iAEMSE"][:,0]]
         return args
     def __call__(self,args,EventInfo):
         (LV0,LV1,MSE)=args
-        invm=(LV0 + LV1).M() 
+        invm=(LV0 + LV1).M()
 
         #This is where I can access the fake MSE shift object that was passed to the processor below
         msescale=EventInfo.eventcontainer["msescale"][EventInfo.dataset]
@@ -219,27 +226,27 @@ myana=  [
         PColumn(ColumnSelectionPre()),
         #PFilter just takes in a function that outputs a series of bools
         PFilter(KinematicSelection(200.,50.)),
-        #PRow takes in two elements.  
+        #PRow takes in two elements.
         #The first describes the output collections and variables and the second is the function that will deliver them
         PRow([["FatJet","LV"]],MakePtEtaPhiMLV()),
         #PColumn just takes in a function that outputs a new dataframe
         PColumn(ColumnSelection()),
-        #The collection here is "Hists" so we can plot these variables 
+        #The collection here is "Hists" so we can plot these variables
         PRow([["Hists","invm"],["Hists","logMSE"],["Hists","logMSEshift"]],MyAnalyzerVec()),
         PColumn(ColumnWeights()),
         ]
 
 
 #Every action receives the "EventInfo" object.  This contains any state information (like current dataset or number of events processed)
-#But also, you can pass anthing you want as well through the eventcontainer.  
+#But also, you can pass anthing you want as well through the eventcontainer.
 #Here we pass some hypothetical dataset dependent MSE shift as an example.
-#Also, objects can be passed through the class __init__ for each function  
+#Also, objects can be passed through the class __init__ for each function
 evcont={"msescale":{"TT":1.10,"QCD_HT1500to2000":0.9},"lumi":(1000.0*137.65),"xsec":{"TT":0.047,"QCD_HT1500to2000":101.8},"nev":{"TT":305963.0,"QCD_HT1500to2000":10655313.0}}
 
 #The processor just takes in all the peices
 
 proc=PProcessor(chunklist,histos,branchestoread,myana,eventcontainer=evcont,atype="flat",scalars=scalars)
-#Multiprocessor 
+#Multiprocessor
 Mproc=PProcRunner(proc,6)
 #Then runs them
 returndf=Mproc.Run()
@@ -254,5 +261,4 @@ for ds in histos:
     for var in histos[ds]:
             histos[ds][var].Write(ds+"__"+var)
 output.Close()
-
 
