@@ -32,7 +32,7 @@ class PSequential():
                 
                 if isinstance(df[branch],pd.DataFrame):
                     #if branch=="FatJet":
-                    #    print(df[branch].shape)
+                     #   print(df[branch].shape)
                     inddict[branch]=(df[branch].index)
             #print(type(seq))
 
@@ -68,7 +68,16 @@ class PFilter():
             Cond= Cond.droplevel(level=1)
         for branch in df:
             if isinstance(df[branch],pd.DataFrame):
+                #print("branch",branch)
+                #if branch=="":
+                 #   print(branch,len(df[branch]["event"].index.unique()))
+                #else:
+                #    print(branch,len(df[branch]["event"][:,0].index))
                 df[branch]=df[branch][df[branch].index.get_level_values(0).isin(Cond[Cond].index,level=0)]
+                #if branch=="":
+                #    print(branch,len(df[branch]["event"].index.unique()))
+                #else:
+                #    print(branch,len(df[branch]["event"][:,0].index))
             if branch=="Hists":
 
                 df[branch]["event"]=df[branch]["event"][df[branch]["event"].index.get_level_values(0).isin(Cond[Cond].index,level=0)]
@@ -125,6 +134,7 @@ class PRow():
                 else:
                     #print (df[dictname]["event"].index)
                     #print (Serdict[cname[idname]].index.unique())
+                    #print (df[dictname]["event"])
                     Serdict[cname[idname]].index=df[dictname]["event"].index.unique()
                     #print (Serdict[cname[idname]])
             if isinstance(df[dictname],dict):
@@ -156,8 +166,13 @@ def FillHist(df,hists):
                     
                 else:
                     axes=[hh]
+                #print(axes[0],df.keys())
+                
                 if not axes[0] in df:
+                    #print(axes[0],"not found")
                     continue
+                #else:
+                 #   print(axes[0],df[axes[0]])
                 nent=len(df[axes[0]])
                 weights=array("d",[1.0]*nent)
                 for caxis in axes:
@@ -187,6 +202,9 @@ def FillHist(df,hists):
                     #print(df[hh+"__weight"][hh+"__weight"].values)
                     if((len(df[hh][hh].values)>0) and (len(df[hh+"__weight"][hh+"__weight"].values)==len(df[hh][hh].values))):
                         hists[hh].FillN(nent,array("d",df[hh][hh].values),array("d",df[hh+"__weight"][hh+"__weight"].values))
+                    #else:
+                        #print("Err")
+                        #print(df[hh][hh].values,df[hh+"__weight"][hh+"__weight"].values)
                     
 class PProcRunner():
     def __init__(self,Proc,nproc):
@@ -229,7 +247,7 @@ class PProcRunner():
                     cutflowtot={}
                     resarr = results
                     print("Fill Hist")
-
+                    first=True
                     for ir,rr in enumerate(resarr):
                         for ds in rr:
                             #print (rr[ds])
@@ -250,16 +268,16 @@ class PProcRunner():
                                 histreturn[ds]={}
                             if skip:
                                 continue
-                            if ir==0:
-                                timetot[ds]={}
-                                for benchmark in rr[ds][1]:
-                                    timetot[ds][benchmark]=rr[ds][1][benchmark]-rr[ds][1]["Start"]
-                                cutflowtot[ds]=rr[ds][2]
+                            if not (ds in timetot):
+                                    timetot[ds]={}
+                                    for benchmark in rr[ds][1]:
+                                        timetot[ds][benchmark]=rr[ds][1][benchmark]-rr[ds][1]["Start"]
+                                    cutflowtot[ds]=rr[ds][2]
                             else:
-                                for benchmark in (timetot[ds]):
-                                    timetot[ds][benchmark]=max(rr[ds][1][benchmark]-rr[ds][1]["Start"],timetot[ds][benchmark])
-                                for cc in range(len(cutflowtot[ds])):
-                                    cutflowtot[ds][cc]+=rr[ds][2][cc]
+                                    for benchmark in (timetot[ds]):
+                                        timetot[ds][benchmark]=max(rr[ds][1][benchmark]-rr[ds][1]["Start"],timetot[ds][benchmark])
+                                    for cc in range(len(cutflowtot[ds])):
+                                        cutflowtot[ds][cc]+=rr[ds][2][cc]
 
                     
                     for ds in cutflowtot:
@@ -374,19 +392,18 @@ class PProcessor():
                                 if not (bmaj in self.scalars):
                                     brancharr.append("n"+bmaj)
 
-                                brancharr.append("event")
-                            #print(dffull.loc[:,'event'])
-                            dffull.loc[:,'event']=dffull.loc[:,'event'].fillna(method="ffill")
-                            #print(dffull.loc[:,'event'])
+                            
                             df[bmaj]=dffull[brancharr]
-                            #print(df[bmaj]["event"])
-                            #df[bmaj].loc[:,'event'].fillna(method="ffill", inplace = True)
-                            #df[bmaj]["event"]=df[bmaj]["event"].fillna(method="ffill")
-                            #print(df[bmaj]["event"])
                             namemap = {x:x.replace(bmaj+"_","") for x in brancharr}
 
                             df[bmaj]=df[bmaj].rename(columns=namemap)
+                            #print(df[bmaj])
                             df[bmaj]=df[bmaj].dropna(how='all')
+                            if bmaj=="":
+                                df[bmaj]=df[bmaj].dropna(how='any')
+                            if bmaj!="":
+                                    df[bmaj]=pd.concat((df[bmaj],dffull["event"]),axis=1,join='inner')
+                                    #print(df[bmaj])
 
                     df["Hists"]={}
                     df["Hists"]["event"]=pd.Series(df[""]["event"],index=df[""].index)
@@ -397,6 +414,7 @@ class PProcessor():
                     #print(df["Hists"])
                     df[""]=df[""].droplevel(level=1)
                     df["Hists"]["event"]=df["Hists"]["event"].droplevel(level=1)
+
                     df["Hists"]["weight"]=df["Hists"]["weight"].droplevel(level=1)
                     #print(df["Hists"])
                     prekeys=df.keys()
@@ -425,13 +443,14 @@ class PProcessor():
                     self.timing["Analyzed"]=(time.time())
                     self.cutflow[1]+= df[""].shape[0]
                     eventlist=df[""]["event"]
+                    
                     for branch in prekeys:
+                            #tofix
                             if branch!="" and  isinstance(df[branch],pd.DataFrame):
-
+                                #print(len(df[branch]["event"][:,0]))
+                                #sprint(len(eventlist.unique()))
                                 br = df[branch]["event"].unique()==eventlist.unique()
-                                #print(df[branch]["event"].unique())
-                                #print(eventlist.unique())
-                                #print(branch,br)
+                               
                                 if not (br).all():
                                     raise ValueError("Events are not 1-to-1 in collection",branch)
                     for hh in df["Hists"]:
@@ -574,7 +593,9 @@ class PNanotoDataFrame():
                                                         if self.seq!=None:
 
                                                             (loaded[nchunk],_)=PSequential(self.seq)(loaded[nchunk],None)
-
+                                                            #print(loaded[nchunk])
+                                                            loaded[nchunk].loc[:,'event']=loaded[nchunk].loc[:,'event'].fillna(method="ffill")
+                                                            #print(loaded[nchunk])
                                                             loaded[nchunk].to_parquet(fname)
                                         
                                                     fullout=pd.DataFrame()
