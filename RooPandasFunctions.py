@@ -1,4 +1,3 @@
-
 import awkward0
 import awkward as ak
 import uproot3
@@ -8,7 +7,7 @@ import pandas as pd
 import time
 from array import array
 from collections import OrderedDict
-from tqdm.auto import tqdm
+from tqdm import tqdm
 from pathlib import Path
 import os
 from glob import glob
