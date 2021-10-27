@@ -5,7 +5,7 @@ import pandas as pd
 import tqdm
 from RooPandasFunctions import PNanotoDataFrame,PSequential,PColumn,PFilter,PRow,PProcessor,PProcRunner,PInitDir
 from collections import OrderedDict
-import pyspark
+
 
 #Define Datasets and corresponding file selections
 fnames={}
