@@ -272,32 +272,17 @@ class PProcRunner():
                     
 
             else:
-                    runout=self.Proc.Run(crange)
+                    histreturn=self.Proc.Run(crange)
                     timetot={}
                     cutflowtot={}
-                    for ds in runout:
+                 
+                    #for ds in cutflowtot:
+                     #       print("Timing...")
 
-                        for ph in runout[ds][0]:
-                            if ds in histreturn:
-                                    if ph in histreturn[ds]:
-                                        histreturn[ds][ph]=pd.concat((histreturn[ds][ph],runout[ds][0][ph]))
-                                    else:
-                                        histreturn[ds][ph]=runout[ds][0][ph]
-                            else:
-                                histreturn[ds]={}
-                        #print("Fill")
-                        #FillHist(runout[ds][0],self.Proc.hists[ds])
-                        timetot[ds]={}
-                        for benchmark in runout[ds][1]:
-                            timetot[ds][benchmark]=runout[ds][1][benchmark]-runout[ds][1]["Start"]
-                        cutflowtot[ds]=runout[ds][2]
-                    for ds in cutflowtot:
-                            print("Timing...")
-
-                            for benchmark in timetot[ds]:
-                                print ("\t",benchmark,timetot[ds][benchmark])
-                            print ("Dataset:",ds,"Completed")
-                            print ("Events input:",cutflowtot[ds][0],"output:",cutflowtot[ds][1])
+                      #      for benchmark in timetot[ds]:
+                       #         print ("\t",benchmark,timetot[ds][benchmark])
+                        #    print ("Dataset:",ds,"Completed")
+                         #   print ("Events input:",cutflowtot[ds][0],"output:",cutflowtot[ds][1])
 
 
             print("Total time",time.time()-fulltime)
