@@ -429,11 +429,13 @@ class PProcessor():
                     for hh in df["Hists"]:
                             #print ("temp")
                             #print(self.hists[ds])
-                            #print(hh,hh in self.hists[ds])
+                            #print(hh , self.rhistlist)
+
                             if (not hh in self.rhistlist):
                                 continue
-                            if (hh not in histreturn):
-                                continue
+                            #print("in!",hh)
+                            #if (hh not in histreturn):
+                             #   continue
                             if hh in histreturn:
                                 histreturn[hh]=pd.concat((histreturn[hh],df["Hists"][hh]))
                             else:

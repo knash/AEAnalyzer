@@ -120,8 +120,9 @@ class KinematicSelection():
         self.msdcut=msdcut
     def __call__(self,df,EventInfo):
         
-        fjcutpt=(df["FatJet"]["pt"]>self.ptcut[0]) &(df["FatJet"]["pt"]<self.ptcut[1]) 
-        df["FatJet"]=df["FatJet"][fjcutpt]
+        fjcutpt=(df["FatJet"]["pt"]>self.ptcut[0])&(df["FatJet"]["pt"]<self.ptcut[1])#&(df["FatJet"]["hadronFlavour"]>3.5) 
+        #print(df["FatJet"]["hadronFlavour"])
+        df["FatJet"]=(df["FatJet"][fjcutpt])
         C1=(df["FatJet"]["event"].count(level=0))==self.njet
 
         fjcutmass=(df["FatJet"]["msoftdrop"]>self.msdcut[0])&(df["FatJet"]["msoftdrop"]<self.msdcut[1])
@@ -132,6 +133,8 @@ class KinematicSelection():
         fjcut=fjcutpt&fjcutmass
         C0=((fjcut).sum(level=0)>0)
    
+        #print (df["FatJet"])
+        #print (df["FatJet"]["hadronFlavour"]>3.5)
 
         if (not ( C0 & C1 & C2).any()):
             return None
@@ -201,6 +204,7 @@ class KinematicSelectionDR():
 class MakeTags():
     def __init__(self,njet):
         self.njet=njet
+
     def __call__(self,df,EventInfo):
 
 
@@ -239,7 +243,11 @@ class MakeTags():
         df["Hists"]["njettight"] = njettight
         df["Hists"]["njetloose"] = njetloose
         df["Hists"]["logmse"] = logmse
-
+        #df["FatJet"]["p"] = df["FatJet"]["pt"]*np.cosh(df["FatJet"]["eta"])
+        #df["FatJet"]["E"] = np.sqrt(df["FatJet"]["p"]*df["FatJet"]["p"]+df["FatJet"]["msoftdrop"]*df["FatJet"]["msoftdrop"])
+        #print()
+        #print (df["FatJet"]["pt"])
+        #print (df["FatJet"]["p"])
         for ijet in range(self.njet):
                 df["Hists"]["logmse"+str(ijet)] = logmse[:,ijet]
 
@@ -281,7 +289,7 @@ class ColumnWeights():
 
 
 #make histograms to be used for creating the pass-to-fail ratio
-class MakeHistsForBkg():
+class MakeHistsForRate():
     def __init__(self,njet):
         self.njet=njet
     def __call__(self,df,EventInfo):
@@ -294,10 +302,14 @@ class MakeHistsForBkg():
 
                         etacut=(bkgparam["eta"][ebin][0]<=abseta)&(abseta<bkgparam["eta"][ebin][1])
                         masscut=(bkgparam["mass"][mbin][0]<=df["FatJet"]["msoftdrop"])&(df["FatJet"]["msoftdrop"]<bkgparam["mass"][mbin][1])
-
+                        tcond=(df["Hists"]["njettight"]==1) & (df["Hists"]["njetloose"]==2)
+                        #print(tcond)
+                        #lcond=(df["Hists"]["njettight"]==0) & (df["Hists"]["njetloose"]==3)
                         try:
-                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][df["FatJet"]["tight"]][etacut][masscut][:,ijet]
-                            df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift0"+str(ijet)]]
+
+                            df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift0"+str(ijet)]]
+                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift0"+str(ijet)]]
+                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift0"+str(ijet)]]
                         except:
                             print("Fail ptT",ebin,mbin)
                             pass
@@ -306,28 +318,50 @@ class MakeHistsForBkg():
                         #print("3",df["FatJet"]["pt"][etacut][masscut][:,ijet])
                         #print("4",df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift1"+str(ijet)]])
                         try:
-                            df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift1"+str(ijet)]]
+                            df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][tcond][tcond][df["Hists"]["tightshift1"+str(ijet)]]
+                            #df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][tcond][tcond][df["Hists"]["tightshift1"+str(ijet)]]
+                            #df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][tcond][tcond][df["Hists"]["tightshift1"+str(ijet)]]
                         except:
                             print("Fail shift1 ptT",ebin,mbin)
                             pass
 
                         try:
-                            df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift2"+str(ijet)]]
+                            df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift2"+str(ijet)]]
+                            #df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift2"+str(ijet)]]
+                            #df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift2"+str(ijet)]]
                         except:
                             print("Fail shift2 ptT",ebin,mbin)
                             pass
 
                         try:
                             df["Hists"]["ptL"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][df["FatJet"]["loose"]][etacut][masscut][:,ijet]
+                            #df["Hists"]["ptL"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][df["FatJet"]["loose"]][etacut][masscut][:,ijet]
+                            #df["Hists"]["ptL"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][df["FatJet"]["loose"]][etacut][masscut][:,ijet]
                         except:
                             print("Fail ptL",ebin,mbin)
                             pass
 
 
+        return df
+
+
+
+#make histograms to be used for creating the pass-to-fail ratio
+class MakeHistsForBkg():
+    def __init__(self,njet):
+        self.njet=njet
+    def __call__(self,df,EventInfo):
+        bkgparam=EventInfo.eventcontainer["bkgparam"]
+        for ijet in range(self.njet):
+
+ 
             regionstr="LT"+str(ijet)+str(njet-ijet)
+
             df["Hists"]["ht_"+regionstr]=df["Hists"]["ht"][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
             
         return df
+
+
 
 
 # In[11]:
@@ -345,6 +379,8 @@ class BkgEst():
         try:
             for ijet in range(self.njet):
                 args.append(df["FatJet"]["pt"][:,ijet])
+                #args.append(df["FatJet"]["p"][:,ijet])
+                #args.append(df["FatJet"]["E"][:,ijet])
                 args.append(df["FatJet"]["eta"][:,ijet].abs())
                 args.append(df["FatJet"]["msoftdrop"][:,ijet])
                 args.append(df["FatJet"]["tight"][:,ijet])
@@ -410,6 +446,7 @@ class BkgEst():
 
                             ptbin=RateHists["Rateshift1"+ebin+mbin].FindBin(pt[ijet])
                             TRtemp=RateHists["Rate"+ebin+mbin].GetBinContent(ptbin)
+                            #print(pt[ijet],ptbin,TRtemp)
                             TRtempshift1=RateHists["Rateshift1"+ebin+mbin].GetBinContent(ptbin)
                             TRtempshift2=RateHists["Rateshift2"+ebin+mbin].GetBinContent(ptbin)
                             TRtemperr=RateHists["Rateshift1"+ebin+mbin].GetBinError(ptbin)
@@ -536,7 +573,7 @@ if op_etaparamonly:
 #todo: muon triggers a failure mode as sometimes events have no muons and no filter remo 
 branchestoread={
                     #"Muon":["pt","eta","phi","mass"],
-                    "FatJet":["pt","eta","phi","mass","msoftdrop","iAEMSE"],
+                    "FatJet":["pt","eta","phi","mass","msoftdrop","iAEMSE","hadronFlavour"],
                     "":["run","luminosityBlock","event"]
                     }
 
@@ -593,9 +630,9 @@ def MakeProc(njet,step,evcont):
         myana=  [
                 PColumn(PreColumn()),
                 PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut)), 
-                PFilter(KinematicSelectionDR(njet,1.6)),
+                PFilter(KinematicSelectionDR(njet,1.4)),
                 PColumn(MakeTags(njet)),
-                PColumn(MakeHistsForBkg(njet)),
+                PColumn(MakeHistsForRate(njet)),
                 PColumn(ColumnWeights()),
                 ]
 
@@ -620,9 +657,10 @@ def MakeProc(njet,step,evcont):
                     
         myana=  [
                 PColumn(PreColumn()),
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut)),     
-                PFilter(KinematicSelectionDR(njet,1.6)),
+                PFilter(KinematicSelection(njet,[400.0,float("inf")],sdcut)),     
+                PFilter(KinematicSelectionDR(njet,1.4)),
                 PColumn(MakeTags(njet)),
+                PColumn(MakeHistsForBkg(njet)),
                 PRow(hpass,BkgEst(njet)),
                 #PColumn(MakeToys(njet)),
                 PColumn(ColumnWeights()),
