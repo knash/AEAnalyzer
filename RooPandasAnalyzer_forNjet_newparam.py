@@ -69,6 +69,10 @@ parser.add_option('--quickrun', metavar='F', action='store_true',
 		  dest='quickrun',
 		  help='quickrun')
 
+parser.add_option('--qcdonly', metavar='F', action='store_true',
+		  default=False,
+		  dest='qcdonly',
+		  help='qcdonly')
 
 (options, args) = parser.parse_args()
 op_nproc=int(options.nproc)
@@ -79,6 +83,7 @@ op_aeval=options.aeval
 op_massparamonly=options.massparamonly
 op_etaparamonly=options.etaparamonly
 op_nocorr=options.nocorr
+qcdonly=options.qcdonly
 # In[3]:
 
 
@@ -302,14 +307,14 @@ class MakeHistsForRate():
 
                         etacut=(bkgparam["eta"][ebin][0]<=abseta)&(abseta<bkgparam["eta"][ebin][1])
                         masscut=(bkgparam["mass"][mbin][0]<=df["FatJet"]["msoftdrop"])&(df["FatJet"]["msoftdrop"]<bkgparam["mass"][mbin][1])
-                        tcond=(df["Hists"]["njettight"]==1) & (df["Hists"]["njetloose"]==2)
+                        tcond=True
                         #print(tcond)
                         #lcond=(df["Hists"]["njettight"]==0) & (df["Hists"]["njetloose"]==3)
                         try:
-
-                            df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift0"+str(ijet)]]
-                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift0"+str(ijet)]]
-                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift0"+str(ijet)]]
+                            df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift0"+str(ijet)]]
+                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift0"+str(ijet)]]
+                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][df["Hists"]["tightshift0"+str(ijet)]]
+                            #df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][df["Hists"]["tightshift0"+str(ijet)]]
                         except:
                             print("Fail ptT",ebin,mbin)
                             pass
@@ -318,15 +323,15 @@ class MakeHistsForRate():
                         #print("3",df["FatJet"]["pt"][etacut][masscut][:,ijet])
                         #print("4",df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift1"+str(ijet)]])
                         try:
-                            df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][tcond][tcond][df["Hists"]["tightshift1"+str(ijet)]]
-                            #df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][tcond][tcond][df["Hists"]["tightshift1"+str(ijet)]]
-                            #df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][tcond][tcond][df["Hists"]["tightshift1"+str(ijet)]]
+                            df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift1"+str(ijet)]]
+                            #df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift1"+str(ijet)]]
+                            #df["Hists"]["ptTshift1"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift1"+str(ijet)]]
                         except:
                             print("Fail shift1 ptT",ebin,mbin)
                             pass
 
                         try:
-                            df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift2"+str(ijet)]]
+                            df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["pt"][etacut][masscut][:,ijet][df["Hists"]["tightshift2"+str(ijet)]]
                             #df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["p"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift2"+str(ijet)]]
                             #df["Hists"]["ptTshift2"+str(ijet)+"_"+ebin+mbin]=df["FatJet"]["E"][etacut][masscut][:,ijet][tcond][df["Hists"]["tightshift2"+str(ijet)]]
                         except:
@@ -359,6 +364,15 @@ class MakeHistsForBkg():
 
             df["Hists"]["ht_"+regionstr]=df["Hists"]["ht"][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
             
+            try:
+                df["Hists"]["ptTIGHT"+str(ijet)]=df["FatJet"]["pt"][df["FatJet"]["tight"]][:,ijet]
+            except:
+                pass
+            try:
+                df["Hists"]["ptLOOSE"+str(ijet)]=df["FatJet"]["pt"][df["FatJet"]["loose"]][:,ijet]
+            except:
+                pass
+            #print(df["FatJet"]["pt"][df["FatJet"]["tight"]][:,ijet]    )          
         return df
 
 
@@ -442,21 +456,22 @@ class BkgEst():
                         etacut=(bkgparam["eta"][ebin][0]<=eta[ijet]<bkgparam["eta"][ebin][1])
                         masscut=(bkgparam["mass"][mbin][0]<=msd[ijet]<bkgparam["mass"][mbin][1])
                         if etacut and masscut:
+
+                                    ptbin=RateHists["Rateshift1"+ebin+mbin].FindBin(pt[ijet])
+                                    TRtemp=RateHists["Rate"+ebin+mbin].GetBinContent(ptbin)
+
+                                    TRtempshift1=RateHists["Rateshift1"+ebin+mbin].GetBinContent(ptbin)
+                                    TRtempshift2=RateHists["Rateshift2"+ebin+mbin].GetBinContent(ptbin)
+                                    TRtemperr=RateHists["Rateshift1"+ebin+mbin].GetBinError(ptbin)
+
+                                    Trate[ijet]=TRtemp
+                                    Trateshift1[ijet]=TRtempshift1
+                                    Trateshift2[ijet]=TRtempshift2
+                                    Lrate[ijet]=1.0-TRtemp
                             
 
-                            ptbin=RateHists["Rateshift1"+ebin+mbin].FindBin(pt[ijet])
-                            TRtemp=RateHists["Rate"+ebin+mbin].GetBinContent(ptbin)
-                            #print(pt[ijet],ptbin,TRtemp)
-                            TRtempshift1=RateHists["Rateshift1"+ebin+mbin].GetBinContent(ptbin)
-                            TRtempshift2=RateHists["Rateshift2"+ebin+mbin].GetBinContent(ptbin)
-                            TRtemperr=RateHists["Rateshift1"+ebin+mbin].GetBinError(ptbin)
-
-                            Trate[ijet]=TRtemp
-                            Trateshift1[ijet]=TRtempshift1
-                            Trateshift2[ijet]=TRtempshift2
-                            Lrate[ijet]=1.0-TRtemp
-                            
-                    
+ 
+                        
         weights=[0.0]*(self.njet+1)
         nweights=[0.0]*(self.njet+1)
         
@@ -490,7 +505,11 @@ class BkgEst():
         for icweight,cweight in enumerate(weights):
             allret.append(ht)
             allret.append(cweight*EventInfo.eventcontainer["evweight"])
-            
+        for ijet in range(self.njet):
+            allret.append(pt[ijet])
+            allret.append(Trate[ijet]*EventInfo.eventcontainer["evweight"])
+            allret.append(pt[ijet])
+            allret.append((1.0-Trate[ijet])*EventInfo.eventcontainer["evweight"])
         return (allret)
 
 
@@ -561,7 +580,13 @@ class MakeToys():
 # In[13]:
 
 
+
 chunklist=PInitDir("RooFlatFull")
+for ds in chunklist:
+        if qcdonly:
+            if (ds.split("_")[0]!="QCD"):
+                del chunklist[ds]
+
 bkgparam={}
 
 bkgparam["eta"]={"E0":[0.0,0.5],"E1":[0.5,float("inf")]}
@@ -607,6 +632,7 @@ def MakeProc(njet,step,evcont):
 
         for ijet in range(njet+1):
         
+
             regionstr="LT"+str(ijet)+str(njet-ijet)
 
             histostemp["ht_"+regionstr]=TH1F("ht_"+regionstr,"ht_"+regionstr,700,0,7000)
@@ -629,7 +655,7 @@ def MakeProc(njet,step,evcont):
 
         myana=  [
                 PColumn(PreColumn()),
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut)), 
+                PFilter(KinematicSelection(njet,[400.0,float("inf")],sdcut)), 
                 PFilter(KinematicSelectionDR(njet,1.4)),
                 PColumn(MakeTags(njet)),
                 PColumn(MakeHistsForRate(njet)),
@@ -643,16 +669,35 @@ def MakeProc(njet,step,evcont):
         for ijet in range(njet+1):
             regionstr="LT"+str(ijet)+str(njet-ijet)
             
+
             histostemp["bkg_ht_"+regionstr]=TH1F("bkg_ht_"+regionstr,"bkg_ht_"+regionstr,700,0,7000)
             
             hpass.append(["Hists","bkg_ht_"+regionstr])
             hpass.append(["Hists","bkg_ht_"+regionstr+"__weight"])
-            
+   
+
  
             for itoy in range(ntoys):
                 histostemp["bkg_ht_toy"+str(itoy)+"_"+regionstr]=TH1F("bkg_ht_toy"+str(itoy)+"_"+regionstr,"bkg_ht_toy"+str(itoy)+"_"+regionstr,700,0,7000)         
         
 
+
+        for ijet in range(njet):
+        
+                    histostemp["ptTIGHT"+str(ijet)]=TH1F("ptTIGHT"+str(ijet),"ptTIGHT"+str(ijet),200,0,4000)
+                    histostemp["ptLOOSE"+str(ijet)]=TH1F("ptLOOSE"+str(ijet),"ptLOOSE"+str(ijet),200,0,4000)
+            
+                    histostemp["bkg_ptTIGHT"+str(ijet)]=TH1F("bkg_ptTIGHT"+str(ijet),"bkg_ptTIGHT"+str(ijet),200,0,4000)
+
+                    hpass.append(["Hists","bkg_ptTIGHT"+str(ijet)])
+                    hpass.append(["Hists","bkg_ptTIGHT"+str(ijet)+"__weight"])
+
+                    histostemp["bkg_ptLOOSE"+str(ijet)]=TH1F("bkg_ptLOOSE"+str(ijet),"bkg_ptLOOSE"+str(ijet),200,0,4000)
+
+                    hpass.append(["Hists","bkg_ptLOOSE"+str(ijet)])
+                    hpass.append(["Hists","bkg_ptLOOSE"+str(ijet)+"__weight"])
+            
+          
         print("len(hpass)",len(hpass))        
                     
         myana=  [
@@ -798,7 +843,6 @@ for ijet in range(njet):
                     THists[paramstr].Add(curhistT)
                     LHists[paramstr].Add(curhistL)
                     LHists[paramstr].Add(curhistT)
-                    
                     
                 if not(paramstrwjet in THistsFULL):
                     THistsFULL[paramstrwjet]=copy.deepcopy(curhistT)

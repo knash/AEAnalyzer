@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/cms/knash/conda/envs/davidcopy/bin/python
 # coding: utf-8
 
 # In[1]:
@@ -106,8 +106,9 @@ class PreColumn():
 
 #Select jetwise and eventwise. Exactly 4 jets with pt in region X, and all have sdmass in region Y
 class KinematicSelection():
-    def __init__(self,njet,ptcut,msdcut):
+    def __init__(self,njet,ptcut,htcut,msdcut):
         self.ptcut=ptcut
+        self.htcut=htcut
         self.njet=njet
         self.msdcut=msdcut
     def __call__(self,df,EventInfo):
@@ -126,14 +127,21 @@ class KinematicSelection():
         df["FatJet"]=df["FatJet"][fjcutmass]
 
         C2=(df["FatJet"]["event"].count(level=0))==self.njet
+        tempht=df["FatJet"]["pt"].sum(level=0)
+        #print(tempht,self.htcut)
+        #print(tempht>self.htcut)
+        C4=tempht>self.htcut
 
+        # print(fjcutht)
+        # print(fjcutpt)
         fjcut=fjcutpt&fjcutmass&fjcuteta
         C0=((fjcut).sum(level=0)>0)
    
 
-        if (not ( C0 & C1 & C2 & C3).any()):
+
+        if (not ( C0 & C1 & C2 & C3 & C4).any()):
             return None
-        return ( C0 & C1 & C2 & C3)
+        return ( C0 & C1 & C2 & C3 & C4)
 
 
 # In[7]:
@@ -293,6 +301,9 @@ class MakeHistsForBkg():
             
             regionstr="LT"+str(ijet)+str(njet-ijet)
             df["Hists"]["ht_"+regionstr]=df["Hists"]["ht"][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
+            df["Hists"]["ht0_"+regionstr]=df["Hists"]["ht"][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
+            df["Hists"]["ht1_"+regionstr]=df["Hists"]["ht"][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
+            df["Hists"]["ht2_"+regionstr]=df["Hists"]["ht"][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
             df["Hists"]["abseta_"+regionstr]=df["Hists"]["abseta"][:,0][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
             for jjet in range(njet):
                 df["Hists"]["pt"+str(jjet)+"_"+regionstr]=df["FatJet"]["pt"][:,jjet][df["Hists"]["njettight"]==(njet-ijet)][df["Hists"]["njetloose"]==(ijet)]
@@ -426,20 +437,20 @@ class BkgEst():
             for ibit,bit in enumerate(range(self.njet)):
             
                 curbit=(ar>>bit)&1
+                wval=(float(ntight)*Trate[ibit]/1.0+float(nloose)*Lrate[ibit]/2.0)/float(nloose+ntight)
 
                 #really not sure what the right one is.  
                 if curbit:
                     weight*=Trate[ibit] #is this nonsense?
                     #I use weight1 now.  Not sure though -- this is sum(Rloose)+sum(Rtight) but from LT21 so like the Rloose per jet is Rloose/2.  
                     #Based on the pt agreement, this is average of loose and tight for all jets.  I think there is a better way to do this  
-                    weight1*=(float(ntight)*Trate[ibit]/1.0+float(nloose)*Lrate[ibit]/2.0)/float(nloose+ntight) #is this nonsense? 
-
+                    weight1*= wval #is this nonsense? 
                     weightT*=float(ntight)*Trate[ibit]/1.0 #is this nonsense?
                     weightL*= 1.0#is this nonsense?
 
                 else: 
-                    weight*=1.0-Trate[ibit] #is this nonsense?
-                    weight1*=1.0 #is this nonsense?
+                    weight*=1.0 #is this nonsense?
+                    weight1*=1.0  #is this nonsense?
                     weightT*=1.0 #is this nonsense?
                     weightL*=float(nloose)*Lrate[ibit]/2.0 #is this nonsense?
             #print
@@ -461,27 +472,36 @@ class BkgEst():
 
         #This is the weighted average for ht.  Not sure if this makes sense, each jet has a probabilistic weight so maybe something like this
         htw = 0.0
+        ht1 = 0.0
         denom = 0.0
         if ntighttr==0:
                 for ijet in range(njet):
-                            htw+=pt[ijet]*(Trate[ijet]+Lrate[ijet])
-                            denom+=(Trate[ijet]+Lrate[ijet])/3.0
+                            ht1+=pt[ijet]
+                            htw+=pt[ijet]*(Trate[ijet]+Lrate[ijet])*3.0
+                            denom+=(Trate[ijet]+Lrate[ijet])
                 htw/=denom
         #print(ht,htw)
         
         for icweight,cweight in enumerate(weights1):
-            allret.append(ht)
-            #allret.append(htw)
-
-            #print(icweight,cweight)
+            #print (ht,ht1)
+            httoplot=ht
+            #httoplot=htw
+            allret.append(httoplot)
             allret.append(cweight*EventInfo.eventcontainer["evweight"])
-            
+ 
+
+            for jjet in range(njet):
+
+                allret.append(httoplot)
+                #allret.append((Trate[jjet]+Lrate[jjet])*EventInfo.eventcontainer["evweight"])
+                allret.append((Trate[jjet]+Lrate[jjet])*EventInfo.eventcontainer["evweight"])
+           
             for jjet in range(njet):
 
                 #pt of all events-- Events where jet==jjet is tight + Events where jet==jjet is loose
                 #ht is something like sum(pt) with this weight averged over three jets?
                 allret.append(pt[jjet])
-                allret.append((Trate[jjet]+Lrate[jjet])*EventInfo.eventcontainer["evweight"])
+                allret.append(cweight*EventInfo.eventcontainer["evweight"])
 
                 #pt of all tight events-- Events where jet==jjet is tight + 0
                 allret.append(pt[jjet])
@@ -603,6 +623,10 @@ def MakeProc(njet,step,evcont):
         for ijet in range(njet+1):
             regionstr="LT"+str(ijet)+str(njet-ijet)
             histostemp["ht_"+regionstr]=TH1F("ht_"+regionstr,"ht_"+regionstr,700,0,7000)
+            histostemp["ht0_"+regionstr]=TH1F("ht0_"+regionstr,"ht0_"+regionstr,700,0,7000)
+            histostemp["ht1_"+regionstr]=TH1F("ht1_"+regionstr,"ht1_"+regionstr,700,0,7000)
+            histostemp["ht2_"+regionstr]=TH1F("ht2_"+regionstr,"ht2_"+regionstr,700,0,7000)
+
             histostemp["abseta_"+regionstr]=TH1F("abseta_"+regionstr,"abseta_"+regionstr,120,0,3.0)
 
             for jjet in range(njet):
@@ -619,7 +643,7 @@ def MakeProc(njet,step,evcont):
         histostemp["logMSE_all"]=TH1F("logMSE_all","logMSE_all",100,-20.,0.)
         myana=  [
                 PColumn(PreColumn()),
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut)), 
+                PFilter(KinematicSelection(njet,[200.0,float("inf")],1300.0,sdcut)), 
                 PFilter(KinematicSelectionDR(njet,1.4)),
                 PColumn(MakeTags(njet)),
                 PColumn(MakeHistsForBkg(njet)),
@@ -633,11 +657,22 @@ def MakeProc(njet,step,evcont):
             regionstr="LT"+str(ijet)+str(njet-ijet)
             
             histostemp["bkg_ht_"+regionstr]=TH1F("bkg_ht_"+regionstr,"bkg_ht_"+regionstr,700,0,7000)
-            
             hpass.append(["Hists","bkg_ht_"+regionstr])
             hpass.append(["Hists","bkg_ht_"+regionstr+"__weight"])
 
-          
+            histostemp["bkg_ht0_"+regionstr]=TH1F("bkg_ht0_"+regionstr,"bkg_ht0_"+regionstr,700,0,7000)
+            hpass.append(["Hists","bkg_ht0_"+regionstr])
+            hpass.append(["Hists","bkg_ht0_"+regionstr+"__weight"])
+
+            histostemp["bkg_ht1_"+regionstr]=TH1F("bkg_ht1_"+regionstr,"bkg_ht1_"+regionstr,700,0,7000)
+            hpass.append(["Hists","bkg_ht1_"+regionstr])
+            hpass.append(["Hists","bkg_ht1_"+regionstr+"__weight"])
+
+            histostemp["bkg_ht2_"+regionstr]=TH1F("bkg_ht2_"+regionstr,"bkg_ht2_"+regionstr,700,0,7000)
+            hpass.append(["Hists","bkg_ht2_"+regionstr])
+            hpass.append(["Hists","bkg_ht2_"+regionstr+"__weight"])
+
+    
             
             for jjet in range(njet):
                 
@@ -665,7 +700,7 @@ def MakeProc(njet,step,evcont):
                     
         myana=  [
                 PColumn(PreColumn()),
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut)),     
+                PFilter(KinematicSelection(njet,[200.0,float("inf")],1300.0,sdcut)),     
                 PFilter(KinematicSelectionDR(njet,1.4)),
                 PColumn(MakeTags(njet)),
                 PRow(hpass,BkgEst(njet)),
@@ -976,7 +1011,7 @@ if ntoys>0:
 
     #print("toys")  
 
-tocanv={"ht":[2,[0,5000]],"pt0":[2,[0,3000]],"pt1":[2,[0,3000]],"pt2":[2,[0,3000]],"ptT0":[2,[0,3000]],"ptT1":[2,[0,3000]],"ptT2":[2,[0,3000]],"ptL0":[2,[0,3000]],"ptL1":[2,[0,3000]],"ptL2":[2,[0,3000]]}
+tocanv={"ht":[2,[0,5000]],"ht0":[2,[0,5000]],"ht1":[2,[0,5000]],"ht2":[2,[0,5000]],"pt0":[2,[0,3000]],"pt1":[2,[0,3000]],"pt2":[2,[0,3000]],"ptT0":[2,[0,3000]],"ptT1":[2,[0,3000]],"ptT2":[2,[0,3000]],"ptL0":[2,[0,3000]],"ptL1":[2,[0,3000]],"ptL2":[2,[0,3000]]}
 
 for tc in tocanv:
         for ds in histos:
@@ -1014,10 +1049,15 @@ for tc in tocanv:
 
             for ijet in histoiter:
                     regionstr="LT"+str(ijet)+str(njet-ijet)
-                    if tc[0:2]=="pt":
-  
-                        if regionstr!="LT21":
-                                continue
+                    #if tc[0:2]=="pt":
+                    if len(tc)>2:
+
+                        print(tc,len(tc))
+                        print(tc[2])
+                        if tc[2]=="0" or tc[2]=="1" or tc[2]=="2":
+          
+                                if regionstr!="LT21":
+                                        continue
 
                     bkgname="bkg_"+tc+"_"+regionstr
                     dataname=tc+"_"+regionstr
