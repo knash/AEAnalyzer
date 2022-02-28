@@ -456,18 +456,24 @@ class BkgEst():
                         etacut=(bkgparam["eta"][ebin][0]<=eta[ijet]<bkgparam["eta"][ebin][1])
                         masscut=(bkgparam["mass"][mbin][0]<=msd[ijet]<bkgparam["mass"][mbin][1])
                         if etacut and masscut:
+                                if usefullrate:
+                                        ptbin=RateHistsFULL["Rate"+ebin+"jet"+str(ijet)].FindBin(pt[ijet])
+                                        TRtemp=RateHistsFULL["Rate"+ebin+"jet"+str(ijet)].GetBinContent(ptbin)
+                                        TRLtemp=RateHistsFULL["RateL"+ebin+"jet"+str(ijet)].GetBinContent(ptbin)
+                                        TRtemperr=RateHistsFULL["Rate"+ebin+"jet"+str(ijet)].GetBinError(ptbin)
+                                else:
 
-                                    ptbin=RateHists["Rateshift1"+ebin+mbin].FindBin(pt[ijet])
-                                    TRtemp=RateHists["Rate"+ebin+mbin].GetBinContent(ptbin)
+                                        ptbin=RateHists["Rateshift1"+ebin+mbin].FindBin(pt[ijet])
+                                        TRtemp=RateHists["Rate"+ebin+mbin].GetBinContent(ptbin)
 
-                                    TRtempshift1=RateHists["Rateshift1"+ebin+mbin].GetBinContent(ptbin)
-                                    TRtempshift2=RateHists["Rateshift2"+ebin+mbin].GetBinContent(ptbin)
-                                    TRtemperr=RateHists["Rateshift1"+ebin+mbin].GetBinError(ptbin)
+                                        TRtempshift1=RateHists["Rateshift1"+ebin+mbin].GetBinContent(ptbin)
+                                        TRtempshift2=RateHists["Rateshift2"+ebin+mbin].GetBinContent(ptbin)
+                                        TRtemperr=RateHists["Rateshift1"+ebin+mbin].GetBinError(ptbin)
 
-                                    Trate[ijet]=TRtemp
-                                    Trateshift1[ijet]=TRtempshift1
-                                    Trateshift2[ijet]=TRtempshift2
-                                    Lrate[ijet]=1.0-TRtemp
+                                Trate[ijet]=TRtemp
+                                Trateshift1[ijet]=TRtempshift1
+                                Trateshift2[ijet]=TRtempshift2
+                                Lrate[ijet]=1.0-TRtemp
                             
 
  

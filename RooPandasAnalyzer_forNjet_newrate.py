@@ -393,7 +393,6 @@ class BkgEst():
                     
 
                     if usefullrate:
-
                         ptbin=RateHistsFULL["Rate"+ebin+"jet"+str(ijet)].FindBin(pt[ijet])
                         TRtemp=RateHistsFULL["Rate"+ebin+"jet"+str(ijet)].GetBinContent(ptbin)
                         TRLtemp=RateHistsFULL["RateL"+ebin+"jet"+str(ijet)].GetBinContent(ptbin)
