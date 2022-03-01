@@ -6,16 +6,29 @@ import tqdm
 from RooPandasFunctions import PNanotoDataFrame,PSequential,PColumn,PFilter,PRow,PProcessor,PProcRunner,PInitDir
 from collections import OrderedDict
 
+from optparse import OptionParser
+parser = OptionParser()
+
+parser.add_option('--data', metavar='F', action='store_true',
+		  default=False,
+		  dest='data',
+		  help='data')
+
+(options, args) = parser.parse_args()
+
 
 #Define Datasets and corresponding file selections
 fnames={}
-fnames["QCD_HT1000to1500"] = sorted(glob('/cms/knash/EOS/QCD_HT1000to1500_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
-fnames["QCD_HT1500to2000"]= sorted(glob('/cms/knash/EOS/QCD_HT1500to2000_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
-fnames["QCD_HT2000toInf"]= sorted(glob('/cms/knash/EOS/QCD_HT2000toInf_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
-#fnames["TT"] = sorted(glob('/cms/knash/EOS/ZprimeToTT_M2500_W25_TuneCP2_PSweights_13TeV-madgraph-pythiaMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v2_NanoB2GNano2016mc_v1/*/*/*.root'))
-#fnames["WgWg"] = sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoWs_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
 
-#Do this if accessing over XROOTD
+if (options.data):
+        fnames["DATA_2017_B"]= sorted(glob('/cms/knash/EOS/JetHT/Run2017B-09Aug2019_UL2017-v1_NanoB2GNano2017data_v1/220225_203803/*/*.root'))
+else:
+        fnames["QCD_HT1000to1500"] = sorted(glob('/cms/knash/EOS/QCD_HT1000to1500_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
+        fnames["QCD_HT1500to2000"]= sorted(glob('/cms/knash/EOS/QCD_HT1500to2000_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
+        fnames["QCD_HT2000toInf"]= sorted(glob('/cms/knash/EOS/QCD_HT2000toInf_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
+        #fnames["TT"] = sorted(glob('/cms/knash/EOS/ZprimeToTT_M2500_W25_TuneCP2_PSweights_13TeV-madgraph-pythiaMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v2_NanoB2GNano2016mc_v1/*/*/*.root'))
+        #fnames["WgWg"] = sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoWs_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
+
 fileset={}
 for ffi in fnames:
     fileset[ffi]=[ffj.replace("/eos/uscms/","root://cmsxrootd.fnal.gov///") for ffj in fnames[ffi]]
@@ -23,13 +36,15 @@ for ffi in fnames:
     #fileset[ffi]=fileset[ffi][:10]
 
 #This is the Nano->Parquet file reduction factor
-batchesperfile={"TT":3,"QCD_HT1000to1500":5,"QCD_HT1500to2000":5,"QCD_HT2000toInf":5}
+batchesperfile={"TT":3,"QCD_HT1000to1500":5,"QCD_HT1500to2000":5,"QCD_HT2000toInf":5,"DATA_2017_B":40}
 
 #Keep only the branches you want "Jet",["pt"] would be the branch Jet_pt in the NanoAOD
-branchestokeep=OrderedDict([("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","hadronFlavour","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("",["run","luminosityBlock","event"])])
+branchestokeep=OrderedDict([("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("",["run","luminosityBlock","event"])])
 
+if (not options.data):
+        branchestokeep["FatJet"].append("hadronFlavour")
 #Trim out element indices you dont want (ie only keep top 5 jets etc)
-mind={"FatJet":5,"Jet":15,"Muon":5,"":None,"HLT":None}
+mind={"FatJet":5,"Jet":10,"Muon":5,"":None,"HLT":None}
 
 
 #It is possible to pass a column selection here similar to the analyzer.  

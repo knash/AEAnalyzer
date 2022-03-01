@@ -484,7 +484,8 @@ class PNanotoDataFrame():
                 splitfiles=np.array_split(np.array(self.fileset[ffi]),self.nproc)
 
                 results = [pool.apply_async(self.Convert, args=(ffi,spf,ispf)) for ispf,spf in enumerate(splitfiles)]
-                pool.close()    
+                pool.close()   
+                 
                 resarr = [result.get() for result in results]
 
 
