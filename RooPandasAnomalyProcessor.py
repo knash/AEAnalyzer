@@ -26,11 +26,14 @@ for ffi in fnames:
 batchesperfile={"TT":3,"WgWg":1,"QCD_HT1500to2000":5,"QCD_HT1000to1500":5,"QCD_HT2000toInf":5}
 
 #Keep only the branches you want "Jet",["pt"] would be the branch Jet_pt in the NanoAOD
-branchestokeep=OrderedDict([("FatJet",["pt","eta","phi","mass","hadronFlavour","partonFlavour","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("",["run","luminosityBlock","event"])])
+branchestokeep=OrderedDict([("LHEPart",["pt","eta","phi","mass","pdgId","status"]),("FatJet",["pt","eta","phi","mass","hadronFlavour","partonFlavour","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("",["run","luminosityBlock","event"])])
 #branchestokeep=OrderedDict([("Muon",["pt","eta","phi","mass"]),("Jet",["pt","eta","phi","mass"]),("FatJet",["pt","eta","phi","mass","hadronFlavour","partonFlavour","msoftdrop","iAEMSE","iAEL0","iAEL1","iAEL2","iAEL3","iAEL4","iAEL5"]),("",["run","luminosityBlock","event"])])
 
+
+
+
 #Trim out element indices you dont want (ie only keep top 5 jets etc)
-mind={"FatJet":5,"":None}
+mind={"FatJet":5,"FatJet":5,"":None}
 
 
 #It is possible to pass a column selection here similar to the analyzer.  
