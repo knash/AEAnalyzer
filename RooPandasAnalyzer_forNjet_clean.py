@@ -113,10 +113,12 @@ class PreColumn():
 
 #Select jetwise and eventwise. Exactly 4 jets with pt in region X, and all have sdmass in region Y
 class KinematicSelection():
-    def __init__(self,njet,ptcut,msdcut):
+    def __init__(self,njet,ptcut,msdcut,htcut):
         self.ptcut=ptcut
-        self.njet=njet
         self.msdcut=msdcut
+        self.htcut=htcut
+        self.njet=njet
+
     def __call__(self,df,EventInfo):
         
         fjcutpt=(df["FatJet"]["pt"]>self.ptcut[0])&(df["FatJet"]["pt"]<self.ptcut[1])#&(df["FatJet"]["hadronFlavour"]>3.5) 
@@ -129,15 +131,17 @@ class KinematicSelection():
 
         C2=(df["FatJet"]["event"].count(level=0))==self.njet
 
+        C3=df["FatJet"]["pt"].sum(level=0)>self.htcut
+
         fjcut=fjcutpt&fjcutmass
         C0=((fjcut).sum(level=0)>0)
    
         #print (df["FatJet"])
         #print (df["FatJet"]["hadronFlavour"]>3.5)
 
-        if (not ( C0 & C1 & C2).any()):
+        if (not ( C0 & C1 & C2 & C3).any()):
             return None
-        return ( C0 & C1 & C2)
+        return ( C0 & C1 & C2 & C3)
 
 
 # In[7]:
@@ -168,7 +172,8 @@ class KinematicSelectionDRAK4():
                 return None
 
             closeht=df["Jet"]["pt"][:,0]*0.0
-
+            #print("closeht start")
+            #print(closeht)
             for jjet in range(self.njetAK4):
 
                 #if ijet==jjet:
@@ -185,17 +190,21 @@ class KinematicSelectionDRAK4():
 
                 dr=np.sqrt(dphi*dphi+deta*deta)
                 cond=(self.drrange[0]<dr)&(dr<self.drrange[1])
-                #print("cond",cond)
-                #print("df[Jet][pt][:,jjet]",df["Jet"]["pt"][:,jjet])
-                #print("df[Jet][pt][:,jjet]*cond",df["Jet"]["pt"][:,jjet]*cond)
-                #print("closehtPRE",ijet)
-                #print(closeht)
-                
-                closeht+=df["Jet"]["pt"][:,jjet]*cond
 
-                #print("closehtPOST",ijet)
+                #print ("cond")
+                #print (cond)
+                #print ("httosum")
+
+                httosum=df["Jet"]["pt"][:,jjet]*cond
+                httosum.fillna(0.0,inplace=True)
+                #print (httosum)
+                #print("closehtpre")
                 #print(closeht)
-            
+                closeht+=httosum
+                #print("closehtpost")
+                #print(closeht)
+            #print("closeht")
+            #print(closeht)
             alldiscs.append(closeht<self.maxht)
 
             #print("DONE")
@@ -208,8 +217,9 @@ class KinematicSelectionDRAK4():
             else:
                 evdisc=evdisc&ad
             #print("evd",iad,evdisc)
-        #print("evd",evdisc)
-
+        #print("evd")
+        #print(evdisc)
+        print("ak4disc efficiency",evdisc.sum()/evdisc.size)
         return ( evdisc )
 
 #Select DeltaR cut to make sure AK8 jets are separated
@@ -359,8 +369,32 @@ class ColumnWeights():
                 df["Hists"][hh]=df["Hists"][hh].droplevel(level=1)
 
             df["Hists"][hh+"__weight"] = df["Hists"][hh+"__weight"][df["Hists"][hh+"__weight"].index.isin(df["Hists"][hh].index)]
-         
 
+
+
+
+
+
+
+
+
+
+        if "2dw" in df["Hists"]:
+                df["Hists"]["msd0__pt0__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd0__logmse0__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["logmse0__pt0__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd1__pt1__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd1__logmse1__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["logmse1__pt1__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd2__pt2__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd2__logmse2__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["logmse2__pt2__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd0__msd1__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["pt0__pt1__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd1__msd2__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["pt1__pt2__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["msd2__msd0__weight"]=df["Hists"]["2dw"]
+                df["Hists"]["pt2__pt0__weight"]=df["Hists"]["2dw"]
         df["Hists"]["njettight__njetloose__weight"]=df["Hists"]["njettight__weight"]
         return df
 
@@ -404,31 +438,28 @@ class MakeHistsForRate():
         return df
 
 class TopoStuff():
-    def __init__(self):
+    def __init__(self,njet):
         self.njet=njet
     def __call__(self,df,EventInfo):
         #print("pt")
         total=df["Jet"]["pt"].sum(level=0)
         ak8ht=df["FatJet"]["pt"][:,0]
         ak4ht=df["Jet"]["pt"][:,0]
+
         for ijet in range(1,self.njet):
                 ak8ht+=df["FatJet"]["pt"][:,ijet]
                 ak4ht+=df["Jet"]["pt"][:,ijet]
 
-        fourjetlike=(ak4ht/total<0.8)
-        #print(ak8ht)
-        #print(ak8ht[fourjetlike])
+        #extrajetcut=((ak4ht/total)>0.92)
+        extrajetcut=(df["FatJet"]["pt"][:,self.njet-1]/ak8ht>0.25)
+        #extrajetcut=(df["FatJet"]["pt"][:,self.njet-1]/ak8ht<0.28)
 
-        if (not (fourjetlike).any()):
+
+
+        if (not (extrajetcut).any()):
             return None
-        #print("GO")
-        #print(total)
-        #print(total[fourjetlike])
-        #print("threejetlike")
-        #print(threejetlike)
-        #print("fourjetlike")
-        #print(fourjetlike)
-        return ( fourjetlike)
+
+        return ( extrajetcut)
 
 
 
@@ -460,12 +491,15 @@ class MakeHistsForBkg():
 
         except:
                 pass
-
+        df["Hists"]["2dw"]=(df["FatJet"]["pt"][:,0]/df["FatJet"]["pt"][:,0])*EventInfo.eventcontainer["evweight"]
         for ijet in range(self.njet):
 
-
-
-
+            #histostemp["msd"+str(ijet)+"__pt"+str(ijet)]=TH2F("msd"+str(ijet)+"__pt"+str(ijet),"msd"+str(ijet)+"__pt"+str(ijet),100,0.,200.,100,200.,2000.)
+            #histostemp["msd"+str(ijet)+"__logmse"+str(ijet)]=TH2F("msd"+str(ijet)+"__logmse"+str(ijet),"msd"+str(ijet)+"__logmse"+str(ijet),100,0.,100,-20.,0.)
+        
+            df["Hists"]["msd"+str(ijet)]=df["FatJet"]["msoftdrop"][:,ijet]
+            df["Hists"]["pt"+str(ijet)]=df["FatJet"]["pt"][:,ijet]
+            df["Hists"]["logmse"+str(ijet)]=df["FatJet"]["logmse"][:,ijet]
  
             regionstr="LT"+str(ijet)+str(njet-ijet)
             Tbool=df["Hists"]["njettight"]==(njet-ijet) 
@@ -534,9 +568,8 @@ class BkgEst():
         try:
             for ijet in range(self.njet):
                 args.append(df["FatJet"]["pt"][:,ijet])
-                #args.append(df["FatJet"]["p"][:,ijet])
-                #args.append(df["FatJet"]["E"][:,ijet])
                 args.append(df["FatJet"]["eta"][:,ijet].abs())
+                args.append(df["FatJet"]["phi"][:,ijet])
                 args.append(df["FatJet"]["msoftdrop"][:,ijet])
                 args.append(df["FatJet"]["tight"][:,ijet])
                 args.append(df["FatJet"]["loose"][:,ijet])
@@ -557,17 +590,19 @@ class BkgEst():
 
         pt=[]
         eta=[]
+        phi=[]
         msd=[]
         tight=[]
         loose=[]
        
         disp=3 #hist-type inputs
         for ijet in range(self.njet):
-            pt.append(args[ijet*5+disp+0])
-            eta.append(args[ijet*5+disp+1])
-            msd.append(args[ijet*5+disp+2])
-            tight.append(args[ijet*5+disp+3])
-            loose.append(args[ijet*5+disp+4])
+            pt.append(args[ijet*6+disp+0])
+            eta.append(args[ijet*6+disp+1])
+            phi.append(args[ijet*6+disp+2])
+            msd.append(args[ijet*6+disp+3])
+            tight.append(args[ijet*6+disp+4])
+            loose.append(args[ijet*6+disp+5])
             regionstr="LT"+str(ijet)+str(njet-ijet)
         
         nloose=0
@@ -628,6 +663,15 @@ class BkgEst():
              
                 else:
                     weight*=Lrate[ibit]
+            if ar==2 and False:
+                print()
+                print("010",weight)
+                print ("pt",pt[0],pt[1],pt[2])
+                print ("eta",eta[0],eta[1],eta[2])
+                print ("phi",phi[0],phi[1],phi[2])
+                print ("msd",msd[0],msd[1],msd[2])
+                print ("Trate",Trate[0],Trate[1],Trate[2]  )
+                print ("Lrate",Lrate[0],Lrate[1],Lrate[2]  )
             for ijet in range(self.njet):
                 if ar!=0:
                         if (ar>>ijet)&1:
@@ -763,6 +807,9 @@ bkgparam={}
 bkgparam["eta"]={"E0":[0.0,0.5],"E1":[0.5,float("inf")]}
 bkgparam["mass"]={"M0":[0.0,float("inf")]}
 
+#bkgparam["eta"]={"E0":[0.0,float("inf")]}
+#bkgparam["mass"]={"M0":[0.0,20.0],"M1":[20.0,60.0],"M2":[60.0,float("inf")]}
+
 #todo: muon triggers a failure mode as sometimes events have no muons and no filter remo 
 branchestoread={
                     #"Muon":["pt","eta","phi","mass"],
@@ -838,13 +885,12 @@ def MakeProc(njet,step,evcont):
 
         myana=  [
                 PColumn(PreColumn()),
-
-                PFilter(KinematicSelection(njet,[400.0,float("inf")],sdcut)), 
-                PFilter(KinematicSelectionDR(njet,1.4)),
-                #PFilter(TopoStuff()),
-                #PFilter(KinematicSelectionDRAK4(njet,5,200.0,[0.8,1.4])),
-                PColumn(MakeTags(njet,-0.12)),
-                #PFilter(TopoStuff()),
+                #PFilter(KinematicSelection(njet,[500.0,700.0],sdcut,1200.0)),     
+                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1200.0)), 
+                #PFilter(KinematicSelectionDR(njet,1.4)),
+                PFilter(KinematicSelectionDRAK4(njet,10,300,[0.8,1.2])),
+                #PFilter(TopoStuff(njet)),
+                PColumn(MakeTags(njet)),
                 PColumn(MakeHistsForRate(njet)),
                 PColumn(ColumnWeights()),
                 ]
@@ -900,7 +946,11 @@ def MakeProc(njet,step,evcont):
 
 
         for ijet in range(njet):
-        
+                    histostemp["msd"+str(ijet)+"__pt"+str(ijet)]=TH2F("msd"+str(ijet)+"__pt"+str(ijet),"msd"+str(ijet)+"__pt"+str(ijet),100,0.,300.,100,300.,1500.)
+                    histostemp["msd"+str(ijet)+"__msd"+str((ijet+1)%njet)]=TH2F("msd"+str(ijet)+"__msd"+str((ijet+1)%njet),"msd"+str(ijet)+"__msd"+str((ijet+1)%njet),100,0.,300.,100,0.,300.)
+                    histostemp["pt"+str(ijet)+"__pt"+str((ijet+1)%njet)]=TH2F("pt"+str(ijet)+"__pt"+str((ijet+1)%njet),"pt"+str(ijet)+"__pt"+str((ijet+1)%njet),100,300.,1500.,100,300.,1500.)
+                    histostemp["msd"+str(ijet)+"__logmse"+str(ijet)]=TH2F("msd"+str(ijet)+"__logmse"+str(ijet),"msd"+str(ijet)+"__logmse"+str(ijet),100,0.,300.,100,-18.,-7.)
+                    histostemp["logmse"+str(ijet)+"__pt"+str(ijet)]=TH2F("logmse"+str(ijet)+"__pt"+str(ijet),"logmse"+str(ijet)+"__pt"+str(ijet),100,-18.,-7.,100,300.,1500.)
                     histostemp["ptTIGHT"+str(ijet)]=TH1F("ptTIGHT"+str(ijet),"ptTIGHT"+str(ijet),200,0,4000)
                     histostemp["ptLOOSE"+str(ijet)]=TH1F("ptLOOSE"+str(ijet),"ptLOOSE"+str(ijet),200,0,4000)
                     histostemp["ptLOOSEGT"+str(ijet)]=TH1F("ptLOOSEGT"+str(ijet),"ptLOOSEGT"+str(ijet),200,0,4000)
@@ -929,14 +979,14 @@ def MakeProc(njet,step,evcont):
                     
         myana=  [
                 PColumn(PreColumn()),
-                PFilter(KinematicSelection(njet,[400.0,float("inf")],sdcut)),     
-                PFilter(KinematicSelectionDR(njet,1.4)),
-                PFilter(TopoStuff()),
-                #PFilter(KinematicSelectionDRAK4(njet,5,200.0,[0.8,1.4])),
+                #PFilter(KinematicSelection(njet,[500.0,700.0],sdcut,1200.0)),     
+                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1200.0)),     
+                #PFilter(KinematicSelectionDR(njet,1.4)),
+                PFilter(KinematicSelectionDRAK4(njet,10,300,[0.8,1.2])),
+                #PFilter(TopoStuff(njet)),
                 PColumn(MakeTags(njet)),
                 PColumn(MakeHistsForBkg(njet)),
                 PRow(hpass,BkgEst(njet)),
-                #PColumn(MakeToys(njet)),
                 PColumn(ColumnWeights()),
                 ]
     for hist in histostemp:

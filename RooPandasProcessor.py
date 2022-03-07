@@ -23,7 +23,7 @@ fnames={}
 if (options.data):
         fnames["DATA_2017_B"]= sorted(glob('/cms/knash/EOS/JetHT/Run2017B-09Aug2019_UL2017-v1_NanoB2GNano2017data_v1/220225_203803/*/*.root'))
 else:
-        #fnames["QCD_HT1000to1500"] = sorted(glob('/cms/knash/EOS/QCD_HT1000to1500_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
+        fnames["QCD_HT1000to1500"] = sorted(glob('/cms/knash/EOS/QCD_HT1000to1500_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
         fnames["QCD_HT1500to2000"]= sorted(glob('/cms/knash/EOS/QCD_HT1500to2000_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
         fnames["QCD_HT2000toInf"]= sorted(glob('/cms/knash/EOS/QCD_HT2000toInf_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
         #fnames["TT"] = sorted(glob('/cms/knash/EOS/ZprimeToTT_M2500_W25_TuneCP2_PSweights_13TeV-madgraph-pythiaMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v2_NanoB2GNano2016mc_v1/*/*/*.root'))
