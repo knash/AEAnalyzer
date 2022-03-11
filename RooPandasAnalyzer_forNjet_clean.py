@@ -843,6 +843,7 @@ def MakeProc(njet,step,evcont):
         rhistlist=[]
         for ijet in range(njet):
             rhistlist.append("logmse"+str(ijet))
+            rhistlist.append("logMSE_all")
             for jjet in range(njet):
                 rhistlist.append("biasT"+str(ijet)+str(jjet))
                 rhistlist.append("biasL"+str(ijet)+str(jjet))
@@ -1160,6 +1161,12 @@ for typ in types:
 
 
 # In[ ]:
+for rr in returndf:
+    print(rr,returndf[rr][0].keys())
+    if  "logMSE_all" in returndf[rr][0]:
+        print  (rr ,"cut90",returndf[rr][0]["logMSE_all"].quantile(0.90))
+        print  (rr ,"cut95",returndf[rr][0]["logMSE_all"].quantile(0.95))
+        print  (rr ,"cut99",returndf[rr][0]["logMSE_all"].quantile(0.99))
 
 
 #Step1:use pass-to-fail ratio to predict background
