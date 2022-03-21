@@ -356,6 +356,8 @@ class MakeTags():
 
 #project weights
 class ColumnWeights():
+    def __init__(self,njet):
+        self.njet=njet
     def __call__(self,df,EventInfo):
         keys=list(df["Hists"].keys())
         for hh in keys:
@@ -380,21 +382,15 @@ class ColumnWeights():
 
 
         if "2dw" in df["Hists"]:
-                df["Hists"]["msd0__pt0__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd0__logmse0__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["logmse0__pt0__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd1__pt1__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd1__logmse1__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["logmse1__pt1__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd2__pt2__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd2__logmse2__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["logmse2__pt2__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd0__msd1__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["pt0__pt1__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd1__msd2__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["pt1__pt2__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["msd2__msd0__weight"]=df["Hists"]["2dw"]
-                df["Hists"]["pt2__pt0__weight"]=df["Hists"]["2dw"]
+                for nn in range(self.njet):
+                        for mm in range(self.njet):
+                                if mm==nn:
+                                        df["Hists"]["msd"+str(mm)+"__pt"+str(mm)+"__weight"]=df["Hists"]["2dw"]
+                                        df["Hists"]["msd"+str(mm)+"__logmse"+str(mm)+"__weight"]=df["Hists"]["2dw"]
+                                        df["Hists"]["logmse"+str(mm)+"__pt"+str(mm)+"__weight"]=df["Hists"]["2dw"]
+                                else:
+                                        df["Hists"]["msd"+str(mm)+"__msd"+str(nn)+"__weight"]=df["Hists"]["2dw"]
+                                        df["Hists"]["pt"+str(mm)+"__pt"+str(nn)+"__weight"]=df["Hists"]["2dw"]
         df["Hists"]["njettight__njetloose__weight"]=df["Hists"]["njettight__weight"]
         return df
 
@@ -475,22 +471,26 @@ class MakeHistsForBkg():
         maxbin=2**self.njet      
         allregs=list(range(maxbin))
         allregs.reverse()
-        try:
-                for ar in allregs:
+
+        for ar in allregs:
                         condseries=None
                         for ijet in range(self.njet):
                                 condstr="tight" if ((ar>>ijet)&1) else "loose"
+                                try:
+                                        df["FatJet"][condstr][:,ijet]
+                                except:
+                                        print("missing jet in condstr",str(bin(condstr)),"jet",ijet,)
+                                        continue
                                 if isinstance(condseries,type(None)):
+
                                         condseries=df["FatJet"][condstr][:,ijet]
                                 else:
                                         condseries&=df["FatJet"][condstr][:,ijet]
-                        #print(ar)
-                        #print(condseries)
-                        #print(df["Hists"]["ht"][condseries])
+
                         df["Hists"]["ht_"+str(bin(ar))]=df["Hists"]["ht"][condseries]
 
-        except:
-                pass
+        #except:
+         #       pass
         df["Hists"]["2dw"]=(df["FatJet"]["pt"][:,0]/df["FatJet"]["pt"][:,0])*EventInfo.eventcontainer["evweight"]
         for ijet in range(self.njet):
 
@@ -887,13 +887,13 @@ def MakeProc(njet,step,evcont):
         myana=  [
                 PColumn(PreColumn()),
                 #PFilter(KinematicSelection(njet,[500.0,700.0],sdcut,1200.0)),     
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1200.0)), 
+                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1300.0)), 
                 #PFilter(KinematicSelectionDR(njet,1.4)),
-                PFilter(KinematicSelectionDRAK4(njet,10,300,[0.8,1.2])),
+                PFilter(KinematicSelectionDRAK4(njet,10,100,[0.8,1.2])),
                 #PFilter(TopoStuff(njet)),
                 PColumn(MakeTags(njet)),
                 PColumn(MakeHistsForRate(njet)),
-                PColumn(ColumnWeights()),
+                PColumn(ColumnWeights(njet)),
                 ]
 
     if step==1:
@@ -981,14 +981,14 @@ def MakeProc(njet,step,evcont):
         myana=  [
                 PColumn(PreColumn()),
                 #PFilter(KinematicSelection(njet,[500.0,700.0],sdcut,1200.0)),     
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1200.0)),     
+                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1300.0)),     
                 #PFilter(KinematicSelectionDR(njet,1.4)),
-                PFilter(KinematicSelectionDRAK4(njet,10,300,[0.8,1.2])),
+                PFilter(KinematicSelectionDRAK4(njet,10,100,[0.8,1.2])),
                 #PFilter(TopoStuff(njet)),
                 PColumn(MakeTags(njet)),
                 PColumn(MakeHistsForBkg(njet)),
                 PRow(hpass,BkgEst(njet)),
-                PColumn(ColumnWeights()),
+                PColumn(ColumnWeights(njet)),
                 ]
     for hist in histostemp:
         histostemp[hist].Sumw2() 
@@ -1199,7 +1199,7 @@ histdicts=[histos,ratehistos]
 for hdict in histdicts:
         for curh in htosum:
             hdict[curh]={}
-            print(curh)
+            #print(curh)
             for var in hdict[htosum[curh][0]]:
                 for curhsum in htosum[curh]:
                         if  var in hdict[curh]:
@@ -1228,7 +1228,7 @@ for RHtext in RateHists:
 for ijet in range(njet):
         regionstr="LT"+str(ijet)+str(njet-ijet)
         for jjet in range(njet):
-                print(ijet,jjet,histos[qcdstr].keys())
+                #print(ijet,jjet,histos[qcdstr].keys())
                 if ijet==0:
                      histos[qcdstr]["pt_"+str(jjet)]=copy.deepcopy(histos[qcdstr]["pt_"+str(jjet)+regionstr])
                      histos[qcdstr]["bkg_pt_"+str(jjet)]=copy.deepcopy(histos[qcdstr]["bkg_pt_"+str(jjet)+regionstr])
