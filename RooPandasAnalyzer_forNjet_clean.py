@@ -18,6 +18,7 @@ from optparse import OptionParser
 import subprocess,os,sys
 import time
 import pandas as pd
+import pickle
 
 # In[2]:
 
@@ -61,50 +62,94 @@ parser.add_option('--qcdonly', metavar='F', action='store_true',
 
 
 
-parser.add_option('--dataonly', metavar='F', action='store_true',
+parser.add_option('--data', metavar='F', action='store_true',
 		  default=False,
-		  dest='dataonly',
-		  help='dataonly')
+		  dest='data',
+		  help='data')
+
+parser.add_option('--mc', metavar='F', action='store_true',
+		  default=False,
+		  dest='mc',
+		  help='mc')
+parser.add_option('--sigonly', metavar='F', action='store_true',
+		  default=False,
+		  dest='sigonly',
+		  help='sigonly')
+
+parser.add_option('--white', metavar='F', action='store_true',
+		  default=False,
+		  dest='white',
+		  help='white')
 
 (options, args) = parser.parse_args()
 op_nproc=int(options.nproc)
 op_njet=int(options.njet)
-
 op_massrange=options.massrange
+op_white=options.white
 op_aeval=options.aeval
 
 qcdonly=options.qcdonly
-dataonly=options.dataonly
+dataonly=options.data
+mconly=options.mc
+sigonly=options.sigonly
 # In[3]:
 
 exstr=""
-if qcdonly:
-        exstr+="_qcdonly"
 if dataonly:
-        exstr+="_dataonly"
+        exstr+="_data"
+elif mconly:
+        exstr+="_mc"
+elif qcdonly:
+        exstr+="_qcdonly"
+elif sigonly:
+        exstr+="_sigonly"
+
+if op_white:
+        exstr+="_white"
+
 ntoys=int(options.toys)
 quickrun=options.quickrun
 if quickrun:
     op_nproc=1
 
 
-# In[4]:
 
+
+
+
+
+# In[4]:
+singvalmean = pickle.load( open( "singvalmeanfinal.p", "rb" ) )
 
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 
+def ZCAwhiten(logmsearr,singval):
+        epsilon = 1e-10
+        U,S,V = singval
+        ZCAMatrix = np.dot(U, np.dot(np.diag(1.0/np.sqrt(S + epsilon)), U.T)) 
+        Norm = 1.0/(ZCAMatrix.sum(axis=1)*np.ones(ZCAMatrix.shape)).T
+        ZCAMatrix = np.multiply(ZCAMatrix,Norm)
+        #print(ZCAMatrix)
+        return np.dot(ZCAMatrix, logmsearr) 
 
+def PCAwhiten(logmsearr,evecval):
+        (eival,eivec)=evecval
+        Y=logmsearr.T
+        R, S = eivec, np.diag(np.sqrt(eival))
+        T = R.dot(S).T
+        Z = Y.dot(np.linalg.inv(T))
+        return Z.T
 
 #this creates histos and  weights before any selection
 class PreColumn():
     def __call__(self,df,EventInfo):
         EventInfo.eventcontainer["evweight"] = EventInfo.eventcontainer["lumi"]*EventInfo.eventcontainer["xsec"][EventInfo.dataset]/EventInfo.eventcontainer["nev"][EventInfo.dataset]
-        df["Hists"]["logMSE_all"] = np.log(df["FatJet"]["iAEMSE"])
+        #df["Hists"]["logMSE_all"] = np.log(df["FatJet"]["iAEMSE"])
 
         df["Hists"]["weight"] *= EventInfo.eventcontainer["evweight"]
         #meh, should be added to  columnweights -- todo
-        df["Hists"]["logMSE_all__weight"] = pd.Series(EventInfo.eventcontainer["evweight"], df["Hists"]["logMSE_all"].index, name="logMSE_all__weight")
+        #df["Hists"]["logMSE_all__weight"] = pd.Series(EventInfo.eventcontainer["evweight"], df["Hists"]["logMSE_all"].index, name="logMSE_all__weight")
         return df
 
 
@@ -113,14 +158,16 @@ class PreColumn():
 
 #Select jetwise and eventwise. Exactly 4 jets with pt in region X, and all have sdmass in region Y
 class KinematicSelection():
-    def __init__(self,njet,ptcut,msdcut,htcut):
+    def __init__(self,njet,ptcut,msdcut,htcut,bonly=False,nob=False):
         self.ptcut=ptcut
         self.msdcut=msdcut
         self.htcut=htcut
         self.njet=njet
+        self.bonly=bonly
+        self.nob=nob
 
     def __call__(self,df,EventInfo):
-        
+        #print(df["FatJet"]["pt"])
         fjcutpt=(df["FatJet"]["pt"]>self.ptcut[0])&(df["FatJet"]["pt"]<self.ptcut[1])#&(df["FatJet"]["hadronFlavour"]>3.5) 
         #print(df["FatJet"]["hadronFlavour"])
         df["FatJet"]=(df["FatJet"][fjcutpt])
@@ -139,9 +186,18 @@ class KinematicSelection():
         #print (df["FatJet"])
         #print (df["FatJet"]["hadronFlavour"]>3.5)
 
-        if (not ( C0 & C1 & C2 & C3).any()):
+        C4=True
+        #print(EventInfo.dataset,EventInfo.eventcontainer["isqcd"][EventInfo.dataset])
+        if False:#EventInfo.eventcontainer["isqcd"][EventInfo.dataset]:
+                hfsum=(abs(df["FatJet"]["hadronFlavour"])>3.5).sum(level=0)
+                if self.bonly:
+                        C4=(hfsum>0)
+                if self.nob:
+                        C4=(hfsum==0)
+
+        if (not ( C0 & C1 & C2 & C3 & C4).any()):
             return None
-        return ( C0 & C1 & C2 & C3)
+        return ( C0 & C1 & C2 & C3 & C4)
 
 
 # In[7]:
@@ -220,6 +276,8 @@ class KinematicSelectionDRAK4():
         #print("evd")
         #print(evdisc)
         print("ak4disc efficiency",evdisc.sum()/evdisc.size)
+        if (not (evdisc).any()):
+            return None
         return ( evdisc )
 
 #Select DeltaR cut to make sure AK8 jets are separated
@@ -273,7 +331,8 @@ class KinematicSelectionDR():
             else:
                 evdisc=evdisc&ad
         #print("evd",evdisc)
-
+        if (not (evdisc).any()):
+            return None
         return ( evdisc )
 
 
@@ -282,15 +341,51 @@ class KinematicSelectionDR():
 
 #Create tight and loose jet tags
 class MakeTags():
-    def __init__(self,njet,mseshift=0.0):
+    def __init__(self,njet,mseshift=0.0,white=False):
         self.njet=njet
         self.mseshift=mseshift
+        self.white=white
     def __call__(self,df,EventInfo):
 
+        cut90,cut95,cut99=-11.3,-10.8,-9.95
 
-        cut90,cut95,cut99=-11.28,-10.74,-9.9
+        #if self.white:
+         #       cut90,cut95,cut99=-7.68,-7.20,-6.49
+
         logmse=np.log(df["FatJet"]["iAEMSE"])+self.mseshift
+
+
+
+
+
+
+        lmsearr=[]
+        for ijet in range(self.njet):
+                lmsearr.append(np.array(logmse[:,ijet]))
+
+        singvalmean=EventInfo.eventcontainer["singvalmean"]
+
+        saveysavey=logmse
+        #print("prpr",saveysavey)
+        if self.white:
+                whitlogmse=ZCAwhiten(lmsearr,singvalmean)
+                whitlogmsedf=pd.DataFrame(np.stack(whitlogmse, axis=1).flatten(),index=logmse.index)[0]
+                
+                logmse=whitlogmsedf+self.mseshift
+
+
+        #print("popo",logmse)
+        #print("corr",np.corrcoef(np.array([logmse[:,0],saveysavey[:,0]])))
+
+
         df["FatJet"]["logmse"]=logmse
+
+        df["Hists"]["logMSE_all"] = logmse
+        df["Hists"]["logMSE_all__weight"] = pd.Series(EventInfo.eventcontainer["evweight"], df["Hists"]["logMSE_all"].index, name="logMSE_all__weight")
+
+
+
+        #print(whitlogmse)
         if op_aeval=="90":
             AEcut=cut90
         elif op_aeval=="95":
@@ -305,28 +400,21 @@ class MakeTags():
         njettight=((logmse>AEcut).sum(level=0))
         njetloose=((logmse<AEcut).sum(level=0))
 
-
-        #loose and tight bias from QCD1500 mean meanR 1.0052935 meanL 0.9989067
-
-
-
         
         df["FatJet"]["tight"] = logmse>AEcut
         df["FatJet"]["loose"] = logmse<AEcut
 
-        #df["FatJet"]["tightshift"] = (logmse-0.12)>AEcut
-        #df["FatJet"]["looseshift"] = (logmse-0.12)<AEcut
 
         df["Hists"]["ht"]=df["FatJet"]["pt"].sum(level=0)
 
-        if not EventInfo.eventcontainer["isdata"][EventInfo.dataset]:
+        #if EventInfo.eventcontainer["isqcd"][EventInfo.dataset]:
+        if False:
                 hfsum=(abs(df["FatJet"]["hadronFlavour"])==5).sum(level=0)
                 df["Hists"]["hasb"]=(hfsum>0)
                 df["Hists"]["nob"]=(hfsum==0)
         else:
                 df["Hists"]["hasb"]=df["Hists"]["ht"]*0.
                 df["Hists"]["nob"]=df["Hists"]["hasb"]
-
 
         df["Hists"]["njettight"] = njettight
         df["Hists"]["njetloose"] = njetloose
@@ -336,8 +424,13 @@ class MakeTags():
         #print()
         #print (df["FatJet"]["pt"])
         #print (df["FatJet"]["p"])
+
+
+
         try:
                 for ijet in range(self.njet):
+                        #print("FILLING","logmse"+str(ijet))
+                        #print("FILLING",logmse[:,ijet])
                         df["Hists"]["logmse"+str(ijet)] = logmse[:,ijet]
 
                         for jjet in range(self.njet):
@@ -346,8 +439,16 @@ class MakeTags():
                                         prelogmse=logmse[:,ijet][df["FatJet"]["loose"][:,nthird]]
                                         df["Hists"]["biasT"+str(ijet)+str(jjet)] = ((prelogmse[df["FatJet"]["tight"][:,jjet]]))
                                         df["Hists"]["biasL"+str(ijet)+str(jjet)] = ((prelogmse[df["FatJet"]["loose"][:,jjet]]))
+
+               
         except:
                 pass
+
+                
+        #whitlogmseseries=[]
+        #for ijet in range(self.njet):
+        #                df["Hists"]["logmsewhite"+str(ijet)] = logmse[-1]
+
         return df
 
 
@@ -421,15 +522,21 @@ class MakeHistsForRate():
                         tcond=True
            
                         try:
+                            #print("Glorper!")
                             df["Hists"]["ptT"+str(ijet)+"_"+ebin+mbin]=Tpt[etacut][masscut][:,ijet]
+                            #print("PASS","ptT"+str(ijet)+"_"+ebin+mbin)
                             #df["Hists"]["ptTshift"+str(ijet)+"_"+ebin+mbin]=Tptshift[etacut][masscut][:,ijet]
                         except:
+                            #print("Err","ptT"+str(ijet)+"_"+ebin+mbin)
                             pass
 
                         try:
+
                             df["Hists"]["ptL"+str(ijet)+"_"+ebin+mbin]=Lpt[etacut][masscut][:,ijet]
+                            #print("PASS","ptL"+str(ijet)+"_"+ebin+mbin)
                             #df["Hists"]["ptLshift"+str(ijet)+"_"+ebin+mbin]=Lptshift[etacut][masscut][:,ijet]
                         except:
+                            #print("Err","ptL"+str(ijet)+"_"+ebin+mbin)
                             pass
         return df
 
@@ -438,6 +545,24 @@ class TopoStuff():
         self.njet=njet
     def __call__(self,df,EventInfo):
         #print("pt")
+        #logms=[]
+        #for ijet in range(0,self.njet):
+        #        logms.append(df["FatJet"]["logmse"][:,ijet])
+        #logms=np.array(logms)
+        #print(logms)
+        #corrmat=np.corrcoef(logms)
+        #print("corrmat")
+        #print(corrmat)
+
+        #l0=corrmat[0][0]*logms[0]-0.5*corrmat[0][1]*logms[1]-0.5*corrmat[0][2]*logms[2]
+        #l1=-0.5*corrmat[1][0]*logms[0]+corrmat[1][1]*logms[1]-0.5*corrmat[1][2]*logms[2]
+        #l2=-0.5*corrmat[2][0]*logms[0]-0.5*corrmat[2][1]*logms[1]+corrmat[2][2]*logms[2]
+
+        #logmspost=np.array([l0,l1,l2])
+        #corrmatpost=np.corrcoef(logmspost)
+        #print("corrmatpost")
+        #print(corrmatpost)
+
         total=df["Jet"]["pt"].sum(level=0)
         ak8ht=df["FatJet"]["pt"][:,0]
         ak4ht=df["Jet"]["pt"][:,0]
@@ -446,11 +571,11 @@ class TopoStuff():
                 ak8ht+=df["FatJet"]["pt"][:,ijet]
                 ak4ht+=df["Jet"]["pt"][:,ijet]
 
-        #extrajetcut=((ak4ht/total)>0.92)
-        extrajetcut=(df["FatJet"]["pt"][:,self.njet-1]/ak8ht>0.25)
+        extrajetcut=(((df["FatJet"]["pt"][:,0]-df["FatJet"]["pt"][:,self.njet-1])/ak8ht)<0.25)
+        #extrajetcut=(df["FatJet"]["pt"][:,self.njet-1]/ak8ht>0.25)
         #extrajetcut=(df["FatJet"]["pt"][:,self.njet-1]/ak8ht<0.28)
-
-
+        #extrajetcut=((df["FatJet"]["pt"][:,0]-df["FatJet"]["pt"][:,self.njet-1])/ak8ht>0.25)
+        #print(((df["FatJet"]["pt"][:,0]-df["FatJet"]["pt"][:,self.njet-1])/ak8ht))
 
         if (not (extrajetcut).any()):
             return None
@@ -509,9 +634,9 @@ class MakeHistsForBkg():
 
             htreg=df["Hists"]["ht"][Tbool][Lbool]
             df["Hists"]["ht_"+regionstr]=htreg
-            if not EventInfo.eventcontainer["isdata"][EventInfo.dataset]:
-                    df["Hists"]["htb_"+regionstr]=htreg[df["Hists"]["hasb"]]
-                    df["Hists"]["htl_"+regionstr]=htreg[df["Hists"]["nob"]]
+            if False:
+                df["Hists"]["htb_"+regionstr]=htreg[df["Hists"]["hasb"]]
+                df["Hists"]["htl_"+regionstr]=htreg[df["Hists"]["nob"]]
 
             for jjet in range(self.njet):
 
@@ -793,12 +918,20 @@ chunklist=PInitDir("RooFlatFull")
 #print(chunklist)
 todels=[]
 for ds in chunklist:
-        if qcdonly:
-            if (ds.split("_")[0]!="QCD"):
-                todels.append(ds)
+
         if dataonly:
             if (ds.split("_")[0]!="DATA"):
                 todels.append(ds)
+        elif mconly:
+            if (ds.split("_")[0]=="DATA"):
+                todels.append(ds)
+        elif qcdonly:
+            if (ds.split("_")[0]!="QCD"):
+                todels.append(ds)
+        elif sigonly:
+            if (ds.split("_")[0]=="DATA") or (ds.split("_")[0]=="QCD"):
+                todels.append(ds)
+
 for todel in todels:
         del chunklist[todel]
 
@@ -817,7 +950,7 @@ branchestoread={
                     "FatJet":["pt","eta","phi","mass","msoftdrop","iAEMSE"],
                     "":["run","luminosityBlock","event"]
                }
-if not dataonly:
+if qcdonly:
         branchestoread["FatJet"].append("hadronFlavour")
         branchestoread["LHEPart"]=["pt","eta","phi","mass","pdgId","status"]
 scalars=[""]
@@ -881,17 +1014,18 @@ def MakeProc(njet,step,evcont):
                     #histostemp["ptTshift"+str(ijet)+"_"+ebin+mbin]=TH1F("ptTshift"+str(ijet)+"_"+ebin+mbin,"ptTshift"+str(ijet)+"_"+ebin+mbin,1000,0,10000)
 
         histostemp["logMSE_all"]=TH1F("logMSE_all","logMSE_all",100,-20.,0.)
-
+        histostemp["logMSEwhite_all"]=TH1F("logMSEwhite_all","logMSEwhite_all",100,-20.,0.)
 
 
         myana=  [
                 PColumn(PreColumn()),
                 #PFilter(KinematicSelection(njet,[500.0,700.0],sdcut,1200.0)),     
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1300.0)), 
+                PFilter(KinematicSelection(njet,[400.0,float("inf")],sdcut,1200.0)), 
                 #PFilter(KinematicSelectionDR(njet,1.4)),
-                PFilter(KinematicSelectionDRAK4(njet,10,100,[0.8,1.2])),
-                #PFilter(TopoStuff(njet)),
-                PColumn(MakeTags(njet)),
+                #PFilter(KinematicSelectionDRAK4(njet,10,100,[0.8,1.2])),
+                PFilter(TopoStuff(njet)),
+                PColumn(MakeTags(njet,0.0,op_white)),
+
                 PColumn(MakeHistsForRate(njet)),
                 PColumn(ColumnWeights(njet)),
                 ]
@@ -908,6 +1042,7 @@ def MakeProc(njet,step,evcont):
             histostemp["logmse"+str(ijet)]=TH1F("logmse"+str(ijet),"logmse"+str(ijet),100,-20.,0.)
             histostemp["logmseGT"+str(ijet)]=TH1F("logmseGT"+str(ijet),"logmseGT"+str(ijet),100,-20.,0.)
 
+            histostemp["logmsewhite"+str(ijet)]=TH1F("logmsewhite"+str(ijet),"logmsewhite"+str(ijet),100,-20.,0.)
 
             histostemp["ht_"+regionstr]=TH1F("ht_"+regionstr,"ht_"+regionstr,700,0,7000)
             histostemp["htb_"+regionstr]=TH1F("htb_"+regionstr,"htb_"+regionstr,700,0,7000)
@@ -981,11 +1116,12 @@ def MakeProc(njet,step,evcont):
         myana=  [
                 PColumn(PreColumn()),
                 #PFilter(KinematicSelection(njet,[500.0,700.0],sdcut,1200.0)),     
-                PFilter(KinematicSelection(njet,[200.0,float("inf")],sdcut,1300.0)),     
+                PFilter(KinematicSelection(njet,[400.0,float("inf")],sdcut,1200.0)),     
                 #PFilter(KinematicSelectionDR(njet,1.4)),
-                PFilter(KinematicSelectionDRAK4(njet,10,100,[0.8,1.2])),
-                #PFilter(TopoStuff(njet)),
-                PColumn(MakeTags(njet)),
+                #PFilter(KinematicSelectionDRAK4(njet,10,100,[0.8,1.2])),
+                PFilter(TopoStuff(njet)),
+                PColumn(MakeTags(njet,0.0,op_white)),
+
                 PColumn(MakeHistsForBkg(njet)),
                 PRow(hpass,BkgEst(njet)),
                 PColumn(ColumnWeights(njet)),
@@ -1005,10 +1141,47 @@ def MakeProc(njet,step,evcont):
 
 
 # In[15]:
+isdata={}
+isqcd={}
+issig={}
+for ds in chunklist:
+        isdata[ds]=False
+        isqcd[ds]=False
+        issig[ds]=False
+        if (ds.split("_")[0]=="DATA"):
+                isdata[ds]=True
+        elif (ds.split("_")[0]=="QCD"):
+                isqcd[ds]=True
+        else:
+                issig[ds]=True
 
+nevdict={"HgHg_15001400":36000.0,
+"PgPg_15001400":10500.0,
+"PgPg_1500400":13000.0,
+"WgWg_15001400":34000.0,
+"WgWg_1500400":18000.0,
+"TT":305963.0,
+"QCD_HT1500to2000":10655313.0,
+"QCD_HT1000to1500":12660521.0,
+"QCD_HT2000toInf":4980828.0,
+"DATA_2017_B":1.0}
+
+xsecdict={"HgHg_15001400":1.0,
+"PgPg_15001400":1.0,
+"PgPg_1500400":1.0,
+"WgWg_15001400":1.0,
+"WgWg_1500400":1.0,
+"TT":1.0,
+"QCD_HT1500to2000":101.8,
+"QCD_HT1000to1500":1005.0,
+"QCD_HT2000toInf":20.54,
+"DATA_2017_B":1.0}
 
 njet=op_njet
-evcont={"lumi":(1000.0*137.65),"isdata":{"WgWg":False,"TT":False,"QCD_HT1500to2000":False,"QCD_HT1000to1500":False,"QCD_HT2000toInf":False,"DATA_2017_B":True},"nev":{"WgWg":18000.0,"TT":305963.0,"QCD_HT1500to2000":10655313.0,"QCD_HT1000to1500":12660521.0,"QCD_HT2000toInf":4980828.0,"DATA_2017_B":1.0},"xsec":{"WgWg":1.0,"TT":1.0,"QCD_HT1500to2000":101.8,"QCD_HT1000to1500":1005.0,"QCD_HT2000toInf":20.54,"DATA_2017_B":1.0}}
+evcont={"lumi":(1000.0*137.65),"isdata":isdata,"isqcd":isqcd,"issig":issig,"nev":nevdict,"xsec":xsecdict}
+evcont["singvalmean"]=singvalmean
+
+
 evcont["bkgparam"]=bkgparam
 
 # In[16]:
@@ -1018,8 +1191,92 @@ evcont["bkgparam"]=bkgparam
 proc = MakeProc(njet,0,evcont)
 nproc=op_nproc
 Mproc=PProcRunner(proc,nproc)
-returndf=Mproc.Run()
+Mproc.Run()
+returndf=proc.retdfs
 qcdnames = ["QCD_HT1000to1500","QCD_HT1500to2000","QCD_HT2000toInf"]
+evecs=[]
+evals=[]
+
+l0cum=[]
+l1cum=[]
+l2cum=[]
+
+for rr in returndf:
+        
+        l0=returndf[rr]["logmse0"]
+        l1=returndf[rr]["logmse1"]
+        l2=returndf[rr]["logmse2"]
+
+        l0cum.append(l0)
+        l1cum.append(l1)
+        l2cum.append(l2)
+        
+
+l0cum = np.concatenate(l0cum)
+l1cum = np.concatenate(l1cum)
+l2cum = np.concatenate(l2cum)
+
+cc=np.cov(np.array([l0cum,l1cum,l2cum]))
+
+evecvalmean=np.linalg.eig(cc)
+singvalmeanTEMP=np.linalg.svd(cc)
+
+evalmean=evecvalmean[0]
+singmean=singvalmeanTEMP[0]
+#evalmean=np.mean(evals)
+evecmean=evecvalmean[1]
+singmean=singvalmeanTEMP[1]
+
+ZTEMP=ZCAwhiten(np.array([l0cum,l1cum,l2cum]),singvalmeanTEMP)
+ccpre=np.corrcoef(np.array([l0cum,l1cum,l2cum]))
+#print("ccpre")
+#print(ccpre)
+
+ccpost=np.corrcoef(np.array(ZTEMP))
+#print("ccpost")
+#print(ccpost)
+
+
+
+#evecmean=np.mean(evecs)
+#print(evals)
+#print("np.mean(evals)")
+#print(evalmean)
+#print(evecs)
+#print("np.mean(evecs)")
+#print(evecmean)
+
+
+pickle.dump( singvalmeanTEMP, open( "singvalmean.p", "wb" ) )
+for rr in returndf:
+        #print(rr,returndf)
+        #print(returndf[rr])
+        #print(returndf[rr]["logmse0"])
+        
+        l0=returndf[rr]["logmse0"]
+        l1=returndf[rr]["logmse1"]
+        l2=returndf[rr]["logmse2"]
+
+        logmsearr=np.array([l0,l1,l2])
+
+        Z=ZCAwhiten(logmsearr,singvalmeanTEMP)
+        #for curlmse0 in range (len(logmsearr)):
+         #       for curlmse1 in range (len(logmsearr)):
+          #              print(curlmse0,curlmse1)
+           #             print("ZCA,orig")
+            #            print(np.corrcoef(np.array([logmsearr[curlmse0],Z[curlmse1]]))[0][1],np.corrcoef(np.array([logmsearr[curlmse0],logmsearr[curlmse1]]))[0][1])
+        #print("corr",logmsearr)
+        #print("uncorr",Z)
+
+        ccpre=np.corrcoef(np.array(logmsearr))
+        #print("ccpre")
+        #print(ccpre)
+
+        ccpost=np.corrcoef(np.array(Z))
+        #print("ccpost")
+        #print(ccpost)
+
+
 
 if dataonly:
         alldat = list(chunklist.keys())
@@ -1162,17 +1419,18 @@ for typ in types:
 
 # In[ ]:
 for rr in returndf:
-    print(rr,returndf[rr][0].keys())
-    if  "logMSE_all" in returndf[rr][0]:
-        print  (rr ,"cut90",returndf[rr][0]["logMSE_all"].quantile(0.90))
-        print  (rr ,"cut95",returndf[rr][0]["logMSE_all"].quantile(0.95))
-        print  (rr ,"cut99",returndf[rr][0]["logMSE_all"].quantile(0.99))
+    print(rr,returndf[rr].keys())
+    if  "logMSE_all" in returndf[rr]:
+        print  (rr ,"cut90",returndf[rr]["logMSE_all"].quantile(0.90))
+        print  (rr ,"cut95",returndf[rr]["logMSE_all"].quantile(0.95))
+        print  (rr ,"cut99",returndf[rr]["logMSE_all"].quantile(0.99))
 
 
 #Step1:use pass-to-fail ratio to predict background
 proc = MakeProc(njet,1,evcont)
 Mproc=PProcRunner(proc,nproc)
-returndf=Mproc.Run()
+Mproc.Run()
+returndf=proc.retdfs
 
 
 # In[ ]:
@@ -1192,7 +1450,10 @@ htosum={}
 if dataonly:
         qcdstr="DATA"
         htosum["DATA"]=alldat
-else:
+elif mconly:
+        qcdstr="QCD"
+        htosum["QCD"]=["QCD_HT1500to2000","QCD_HT1000to1500","QCD_HT2000toInf"]
+elif qcdonly:
         qcdstr="QCD"
         htosum["QCD"]=["QCD_HT1500to2000","QCD_HT1000to1500","QCD_HT2000toInf"]
 histdicts=[histos,ratehistos]
@@ -1217,6 +1478,7 @@ for hdict in histdicts:
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 paramstr=""
+
 
 output = TFile("FromFlatPandas_AE"+op_aeval+"_M"+op_massrange+paramstr+"_Njet"+str(op_njet)+exstr+".root","recreate")
 output.cd()
@@ -1475,7 +1737,10 @@ line2.SetLineColor(0)
 line1=ROOT.TLine(1500.0,1.0,5000.0,1.0)
 line1.SetLineStyle(2)
 
-for iar,ar in enumerate(allregs):
+#Only works for 3jet
+allregorder=[0b001,0b010,0b100,0b011,0b101,0b110,0b111,0b000]
+
+for iar,ar in enumerate(allregorder):
 
         main = ROOT.TPad("main", "main", 0, 0.3, 1, 1)
         sub = ROOT.TPad("sub", "sub", 0, 0, 1, 0.3)

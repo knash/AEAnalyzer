@@ -252,22 +252,26 @@ class PProcRunner():
                     timetot={}
                     cutflowtot={}
                     #resarr = results
+                    sumhrets=[]
                     for icproc,cproc in enumerate(results):
-
+                        #print("icproc",icproc)
                         hists,histreturn=cproc
+
                         for ds in hists:
                             for histo in hists[ds]:
-                                #print (self.Proc.hists[ds][histo].Integral(),hists[ds][histo].Integral())
+                                #print("icproc",icproc,ds,histo,"prehist",self.Proc.hists[ds][histo].GetEntries(),"Adding",hists[ds][histo].GetEntries())
                                 self.Proc.hists[ds][histo].Add(hists[ds][histo])
-                                #print (self.Proc.hists[ds][histo].Integral())
-                                #print (ds,histo,self.Proc.hists[ds][histo].Integral())
-                    #for ds in cutflowtot:
-                     #       print("Timing...")
+                                #print("icproc",icproc,ds,histo,"posthist",self.Proc.hists[ds][histo].GetEntries())
+                            #print("histreturn[ds]")
+                            #print(histreturn[ds])
+                            #print("ZERO")
+                            #print(histreturn[ds][0])
+                            #print(histreturn[ds][0])
+                            for historet in histreturn[ds][0]:
 
-                      #      for benchmark in timetot[ds]:
-                       #         print ("\t",benchmark,timetot[ds][benchmark])
-                        #    print ("Dataset:",ds,"Completed")
-                         #   print ("Events input:",cutflowtot[ds][0],"output:",cutflowtot[ds][1])
+                                self.Proc.retdfs[ds][historet] = pd.concat((self.Proc.retdfs[ds][historet],histreturn[ds][0][historet]))
+                       
+                   
                     print("Done")
                     
 
@@ -286,13 +290,19 @@ class PProcRunner():
 
 
             print("Total time",time.time()-fulltime)
-            return histreturn
+            return None
 
 class PProcessor():
     def __init__(self,files,hists,branches,sequence,proc=1,atype="flat",eventcontainer={},scalars=[],verbose=True,rhistlist=[]):
         self.files=files
         self.hists=hists 
+        self.retdfs={}
         self.rhistlist=rhistlist 
+        for hhist in self.hists:
+                
+                self.retdfs[hhist]={}
+                for rrhist in rhistlist:
+                        self.retdfs[hhist][rrhist]=pd.Series()
         self.scalars=scalars 
         self.branches=branches  
         self.proc=proc 
@@ -452,6 +462,7 @@ class PProcessor():
                     else:
                         for benchmark in self.timing:
                             timingagg[benchmark]+=self.timing[benchmark]
+            #print(histreturn,timingagg,self.cutflow)
             return(histreturn,timingagg,self.cutflow)
 
 def PInitDir(path):
@@ -487,7 +498,7 @@ class PNanotoDataFrame():
                 pool.close()   
                  
                 resarr = [result.get() for result in results]
-
+                
 
             else:
                 self.Convert(ffi,self.fileset[ffi])
