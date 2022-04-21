@@ -279,7 +279,9 @@ class PProcRunner():
                     histreturn=self.Proc.Run(crange)
                     timetot={}
                     cutflowtot={}
-                 
+                    for ds in histreturn:
+                            for historet in histreturn[ds][0]:
+                                self.Proc.retdfs[ds][historet]=histreturn[ds][0][historet]
                     #for ds in cutflowtot:
                      #       print("Timing...")
 

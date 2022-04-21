@@ -977,9 +977,9 @@ def MakeProc(njet,step,evcont):
         for ijet in range(njet):
             rhistlist.append("logmse"+str(ijet))
             rhistlist.append("logMSE_all")
-            for jjet in range(njet):
-                rhistlist.append("biasT"+str(ijet)+str(jjet))
-                rhistlist.append("biasL"+str(ijet)+str(jjet))
+            #for jjet in range(njet):
+             #   rhistlist.append("biasT"+str(ijet)+str(jjet))
+              #  rhistlist.append("biasL"+str(ijet)+str(jjet))
 
 
 
