@@ -15,6 +15,12 @@ parser.add_option('--data', metavar='F', action='store_true',
 		  dest='data',
 		  help='data')
 
+parser.add_option('-p', '--nproc', metavar='F', type='int', action='store',
+                  default	=	6,
+                  dest		=	'nproc',
+                  help		=	'nproc')
+
+
 (options, args) = parser.parse_args()
 
 
@@ -39,11 +45,14 @@ else:
         #fnames["QCD_HT2000toInf"]= sorted(glob('/cms/knash/EOS/QCD_HT2000toInf_TuneCP5_PSWeights_13TeV-madgraphMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v1_NanoB2GNano2016mc_v1/*/*/*.root'))
         #fnames["TT"] = sorted(glob('/cms/knash/EOS/ZprimeToTT_M2500_W25_TuneCP2_PSweights_13TeV-madgraph-pythiaMLM-pythia8/RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-v2_NanoB2GNano2016mc_v1/*/*/*.root'))
         #fnames["WgWg"] = sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoWs_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
-        fnames["HgHg_15001400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoHiggs_M1500_M1400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
-        fnames["PgPg_15001400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoPhotons_M1500_M1400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
-        fnames["PgPg_1500400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoPhotons_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
-        fnames["WgWg_15001400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoWs_M1500_M1400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
-        fnames["WgWg_1500400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoWs_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v1/*/*/*.root'))
+
+        fnames["HgHg_15001400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoHiggs_M1500_M1400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v2/*/*/*.root'))
+        fnames["HgHg_1500400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoHiggs_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v2/*/*/*.root'))
+        fnames["PgPg_15001400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoPhotons_M1500_M1400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v2/*/*/*.root'))
+        fnames["PgPg_1500400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoPhotons_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v2/*/*/*.root'))
+        fnames["WgWg_15001400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoWs_M1500_M1400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v2/*/*/*.root'))
+        fnames["WgWg_1500400"]=sorted(glob('/cms/knash/EOS/SQSQtoqchiqchitoWs_M1500_M400_M200/knash-RunIISummer20UL16MiniAOD-106X_mcRun2_asymptotic_v13-76761e5076679f48cfaad96c1b8156aa_NanoB2GNano2016mc_v2/*/*/*.root'))
+
 
 fileset={}
 for ffi in fnames:
@@ -55,6 +64,7 @@ for ffi in fnames:
 batchesperfile={
                 "TT":3,
                 "HgHg_15001400":2,
+                "HgHg_1500400":2,
                 "PgPg_15001400":2,
                 "PgPg_1500400":2,
                 "WgWg_15001400":2,
@@ -104,6 +114,6 @@ skim=  [
        ]
 
 #Run it.  nproc is the number of processors.  >1 goes into multiprocessing model
-PNanotoDataFrame(fileset,branchestokeep,filesperchunk=batchesperfile,nproc=6,atype="flat",dirname="RooFlatFull",maxind=mind,seq=skim).Run()
-
+#PNanotoDataFrame(fileset,branchestokeep,filesperchunk=batchesperfile,nproc=6,atype="flat",dirname="RooFlatFull",maxind=mind,seq=skim).Run()
+PNanotoDataFrame(fileset,branchestokeep,filesperchunk=batchesperfile,nproc=options.nproc,atype="flat",dirname="RooFlatFull",maxind=mind,seq=skim).Run()
 

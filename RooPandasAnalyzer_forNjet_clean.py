@@ -19,7 +19,7 @@ import subprocess,os,sys
 import time
 import pandas as pd
 import pickle
-
+import math
 # In[2]:
 
 
@@ -94,6 +94,16 @@ parser.add_option('--nobiassel', metavar='F', action='store_true',
 		  dest='nobiassel',
 		  help='nobiassel')
 
+parser.add_option('--runrates', metavar='F', action='store_true',
+		  default=False,
+		  dest='runrates',
+		  help='runrates')
+
+parser.add_option('--runana', metavar='F', action='store_true',
+		  default=False,
+		  dest='runana',
+		  help='runana')
+
 (options, args) = parser.parse_args()
 op_nproc=int(options.nproc)
 op_njet=int(options.njet)
@@ -110,7 +120,8 @@ qcdonly=options.qcdonly
 dataonly=options.data
 mconly=options.mc
 sigonly=options.sigonly
-
+runrates=options.runrates
+runana=options.runana
 
 
 
@@ -137,9 +148,10 @@ if op_nobiassel:
         exstr+="_nobiassel"
 ntoys=int(options.toys)
 quickrun=options.quickrun
+
 if quickrun:
     op_nproc=1
-
+    exstr+="_quickrun"
 
 
 
@@ -609,7 +621,22 @@ class MakeHistsForBkg():
             df["Hists"]["msd"+str(ijet)]=df["FatJet"]["msoftdrop"][:,ijet]
             df["Hists"]["pt"+str(ijet)]=df["FatJet"]["pt"][:,ijet]
             df["Hists"]["logmse"+str(ijet)]=df["FatJet"]["logmse"][:,ijet]
- 
+            if True:
+                ind1=(ijet+1)%3
+                ind2=(ijet+2)%3
+                df["Hists"]["logmse"+str(ijet)]=df["FatJet"]["logmse"][:,ijet]
+
+
+            try:
+                df["Hists"]["ptTIGHT"+str(ijet)]=Tpt[:,ijet]
+            except:
+                pass
+            try:
+                df["Hists"]["ptLOOSE"+str(ijet)]=Lpt[:,ijet]
+                df["Hists"]["ptLOOSEGT"+str(ijet)]=Lpt[:,ijet][T1bool]
+            except:
+                pass
+        for ijet in range(self.njet+1):
             regionstr="LT"+str(ijet)+str(njet-ijet)
             Tbool=df["Hists"]["njettight"]==(njet-ijet) 
             Lbool=df["Hists"]["njetloose"]==(ijet)
@@ -630,31 +657,7 @@ class MakeHistsForBkg():
 
 
 
-                #print("pt_"+str(jjet)+regionstr,df["Hists"]["pt_"+str(jjet)+regionstr])
-            #print(regionstr)
-            #print(df["Hists"]["htb_"+regionstr])
-            if True:
-                ind1=(ijet+1)%3
-                ind2=(ijet+2)%3
-                #othertight=df["FatJet"]["tight"][:,ind1] | df["FatJet"]["tight"][:,ind2]
-                #print(othertight)
-                df["Hists"]["logmse"+str(ijet)]=df["FatJet"]["logmse"][:,ijet]
-                #df["Hists"]["logmseGT"+str(ijet)]=df["FatJet"]["logmse"][:,ijet][othertight]
-                #print("logmseGT",df["FatJet"]["logmse"][:,ijet][othertight])
-            #except:
-             #   print("ExCEPT")
-              #  pass
 
-            try:
-                df["Hists"]["ptTIGHT"+str(ijet)]=Tpt[:,ijet]
-            except:
-                pass
-            try:
-                df["Hists"]["ptLOOSE"+str(ijet)]=Lpt[:,ijet]
-                df["Hists"]["ptLOOSEGT"+str(ijet)]=Lpt[:,ijet][T1bool]
-            except:
-                pass
-            #print(df["FatJet"]["pt"][df["FatJet"]["tight"]][:,ijet]    )          
         return df
 
 
@@ -1144,17 +1147,19 @@ for ds in chunklist:
 dataruns={"2016":["B","C","D","E","F","G","H"]}
 
 
-nevdict={"HgHg_15001400":36000.0,
-"PgPg_15001400":10500.0,
-"PgPg_1500400":13000.0,
-"WgWg_15001400":34000.0,
-"WgWg_1500400":18000.0,
+nevdict={"HgHg_15001400":50000.0,
+"HgHg_1500400":50000.0,
+"PgPg_15001400":49500.0,
+"PgPg_1500400":49000.0,
+"WgWg_15001400":50000.0,
+"WgWg_1500400":48300.0,
 "TT":305963.0,
 "QCD_HT1500to2000":10655313.0,
 "QCD_HT1000to1500":12660521.0,
 "QCD_HT2000toInf":4980828.0}
 
 xsecdict={"HgHg_15001400":1.0,
+"HgHg_1500400":1.0,
 "PgPg_15001400":1.0,
 "PgPg_1500400":1.0,
 "WgWg_15001400":1.0,
@@ -1183,103 +1188,144 @@ evcont["bkgparam"]=bkgparam
 
 #Step0:make hists for pass-to-fail ratio
 biassel= not op_nobiassel
-proc = MakeProc(njet,0,evcont,op_ptcut,op_htcut,biassel)
-nproc=op_nproc
-Mproc=PProcRunner(proc,nproc)
-Mproc.Run()
-returndf=proc.retdfs
 qcdnames = ["QCD_HT1000to1500","QCD_HT1500to2000","QCD_HT2000toInf"]
-evecs=[]
-evals=[]
+if dataonly:
+                alldat = list(chunklist.keys())
+                qcdnames = alldat
+nproc=op_nproc
+if runrates:
 
-lcums=[]
-for ijet in range(njet):
-        lcums.append([])
+        proc = MakeProc(njet,0,evcont,op_ptcut,op_htcut,biassel)
 
+        Mproc=PProcRunner(proc,nproc)
+        Mproc.Run()
+        returndf=proc.retdfs
 
-for rr in returndf:
+        evecs=[]
+        evals=[]
+
+        lcums=[]
         for ijet in range(njet):
-                #print("logmse"+str(ijet),returndf[rr]["logmse"+str(ijet)])
-                lcums[ijet].append(returndf[rr]["logmse"+str(ijet)])
-
-for ijet in range(njet):
-        lcums[ijet] = np.concatenate(lcums[ijet])
+                lcums.append([])
 
 
-#print(lcums)
-cc=np.cov(np.array(lcums))
+        for rr in returndf:
+                for ijet in range(njet):
+                        #print("logmse"+str(ijet),returndf[rr]["logmse"+str(ijet)])
+                        lcums[ijet].append(returndf[rr]["logmse"+str(ijet)])
 
-evecvalmean=np.linalg.eig(cc)
-singvalmeanTEMP=np.linalg.svd(cc)
-
-evalmean=evecvalmean[0]
-singmean=singvalmeanTEMP[0]
-#evalmean=np.mean(evals)
-evecmean=evecvalmean[1]
-singmean=singvalmeanTEMP[1]
-
-ZTEMP=ZCAwhiten(np.array(lcums),singvalmeanTEMP)
-ccpre=np.corrcoef(np.array(lcums))
-print ("FULLSET")
-print("ccpre")
-print(ccpre)
-
-ccpost=np.corrcoef(np.array(ZTEMP))
-print("ccpost")
-print(ccpost)
-
-
-
-#evecmean=np.mean(evecs)
-#print(evals)
-#print("np.mean(evals)")
-#print(evalmean)
-#print(evecs)
-#print("np.mean(evecs)")
-#print(evecmean)
-
-pickle.dump( singvalmeanTEMP, open( "singvalmean"+setstr+str(njet)+"jet.p", "wb" ) )
-print ("BY DS")
-for rr in returndf:
-        #print(rr,returndf)
-        #print(returndf[rr])
-        #print(returndf[rr]["logmse0"])
-        topass=[]
         for ijet in range(njet):
-                topass.append(returndf[rr]["logmse"+str(ijet)])
+                lcums[ijet] = np.concatenate(lcums[ijet])
 
-        logmsearr=np.array(topass)
 
-        Z=ZCAwhiten(logmsearr,singvalmeanTEMP)
-        #for curlmse0 in range (len(logmsearr)):
-         #       for curlmse1 in range (len(logmsearr)):
-          #              print(curlmse0,curlmse1)
-           #             print("ZCA,orig")
-            #            print(np.corrcoef(np.array([logmsearr[curlmse0],Z[curlmse1]]))[0][1],np.corrcoef(np.array([logmsearr[curlmse0],logmsearr[curlmse1]]))[0][1])
-        #print("corr",logmsearr)
-        #print("uncorr",Z)
+        #print(lcums)
+        cc=np.cov(np.array(lcums))
 
-        ccpre=np.corrcoef(np.array(logmsearr))
+        evecvalmean=np.linalg.eig(cc)
+        singvalmeanTEMP=np.linalg.svd(cc)
+
+        evalmean=evecvalmean[0]
+        singmean=singvalmeanTEMP[0]
+        #evalmean=np.mean(evals)
+        evecmean=evecvalmean[1]
+        singmean=singvalmeanTEMP[1]
+
+        ZTEMP=ZCAwhiten(np.array(lcums),singvalmeanTEMP)
+        ccpre=np.corrcoef(np.array(lcums))
+        print ("FULLSET")
         print("ccpre")
         print(ccpre)
 
-        ccpost=np.corrcoef(np.array(Z))
+        ccpost=np.corrcoef(np.array(ZTEMP))
         print("ccpost")
         print(ccpost)
 
 
 
-if dataonly:
-        alldat = list(chunklist.keys())
-        qcdnames = alldat
-# In[18]:
+        #evecmean=np.mean(evecs)
+        #print(evals)
+        #print("np.mean(evals)")
+        #print(evalmean)
+        #print(evecs)
+        #print("np.mean(evecs)")
+        #print(evecmean)
+
+        pickle.dump( singvalmeanTEMP, open( "singvalmean"+setstr+str(njet)+"jet.p", "wb" ) )
+        print ("BY DS")
+        for rr in returndf:
+                #print(rr,returndf)
+                #print(returndf[rr])
+                #print(returndf[rr]["logmse0"])
+                topass=[]
+                for ijet in range(njet):
+                        topass.append(returndf[rr]["logmse"+str(ijet)])
+
+                logmsearr=np.array(topass)
+
+                Z=ZCAwhiten(logmsearr,singvalmeanTEMP)
+                #for curlmse0 in range (len(logmsearr)):
+                 #       for curlmse1 in range (len(logmsearr)):
+                  #              print(curlmse0,curlmse1)
+                   #             print("ZCA,orig")
+                    #            print(np.corrcoef(np.array([logmsearr[curlmse0],Z[curlmse1]]))[0][1],np.corrcoef(np.array([logmsearr[curlmse0],logmsearr[curlmse1]]))[0][1])
+                #print("corr",logmsearr)
+                #print("uncorr",Z)
+
+                ccpre=np.corrcoef(np.array(logmsearr))
+                print("ccpre")
+                print(ccpre)
+
+                ccpost=np.corrcoef(np.array(Z))
+                print("ccpost")
+                print(ccpost)
 
 
 
-ratehistos=copy.deepcopy(proc.hists)
+
+        # In[18]:
 
 
 
+        ratehistos=copy.deepcopy(proc.hists)
+        outputrate = TFile("FromFlatPandas_rate_AE"+op_aeval+"_M"+op_massrange+"_Njet"+str(op_njet)+exstr+".root","recreate")
+        outputrate.cd()
+        for ds in ratehistos:
+                for var in ratehistos[ds]:
+                        ratehistos[ds][var].Write(ds+"__"+var)
+
+        for rr in returndf:
+            print(rr,returndf[rr].keys())
+            if  "logMSE_all" in returndf[rr]:
+                print  (rr ,"cut80",returndf[rr]["logMSE_all"].quantile(0.80))
+                print  (rr ,"cut90",returndf[rr]["logMSE_all"].quantile(0.90))
+                print  (rr ,"cut95",returndf[rr]["logMSE_all"].quantile(0.95))
+                print  (rr ,"cut99",returndf[rr]["logMSE_all"].quantile(0.99))
+                print  (rr ,"cut99.5",returndf[rr]["logMSE_all"].quantile(0.995))
+                print  (rr ,"cut99.9",returndf[rr]["logMSE_all"].quantile(0.999))
+
+
+else:
+
+        #outputrate = TFile("FromFlatPandas_rate_AE"+op_aeval+"_M"+op_massrange+"_Njet"+str(op_njet)+exstr+".root","open")
+        outputrate = TFile("FromFlatPandas_rate_AE"+op_aeval+"_M"+op_massrange+"_Njet"+str(op_njet)+"_qcdonly.root","open")
+        print("outputrate",outputrate)
+        outputrate.cd()
+        #print(dir(outputrate))
+        ratehistos={}
+        for ckey in outputrate.GetListOfKeys():
+                curname=ckey.GetName()
+                #print(curname)
+                ds=curname.split("__")[0]
+                var=curname.split("__")[1]
+                if ("ptL" in var) or ("ptT" in var):
+                        if ds in ratehistos:
+                                
+                                ratehistos[ds][var]=ckey.ReadObj()
+                        else:
+                                ratehistos[ds]={}  
+
+if not runana: 
+        sys.exit() 
 
 # In[ ]:
 
@@ -1298,11 +1344,11 @@ types=[""]
 bins=array.array('d',[0,200,210,220,230,240,250,260,280,300,320,340,360,380,420,500,600,700,800,900,1000,1200,1500,2000,10000])
 for typ in types:
         for ijet in range(njet):
-
+            
 
             for qcdname in qcdnames:
                 #print(qcdname)
-
+                     
                 QCDhists=ratehistos[qcdname]
                 for curhist in QCDhists:
                     #print(curhist)
@@ -1406,40 +1452,23 @@ for typ in types:
         evcont["RateHists"+typ]=copy.deepcopy(RateHists)
         evcont["RateHistsFULL"+typ]=copy.deepcopy(RateHistsFULL)
         evcont["toys"+typ]=copy.deepcopy(np.array(alltoys))
-
+        #print(RateHists)
 
 # In[ ]:
-for rr in returndf:
-    print(rr,returndf[rr].keys())
-    if  "logMSE_all" in returndf[rr]:
-        print  (rr ,"cut80",returndf[rr]["logMSE_all"].quantile(0.80))
-        print  (rr ,"cut90",returndf[rr]["logMSE_all"].quantile(0.90))
-        print  (rr ,"cut95",returndf[rr]["logMSE_all"].quantile(0.95))
-        print  (rr ,"cut99",returndf[rr]["logMSE_all"].quantile(0.99))
-        print  (rr ,"cut99.5",returndf[rr]["logMSE_all"].quantile(0.995))
-        print  (rr ,"cut99.9",returndf[rr]["logMSE_all"].quantile(0.999))
+
 
 #Step1:use pass-to-fail ratio to predict background
 proc = MakeProc(njet,1,evcont,op_ptcut,op_htcut,biassel)
+print("MPROC")
 Mproc=PProcRunner(proc,nproc)
 Mproc.Run()
 returndf=proc.retdfs
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
 
 histos=copy.deepcopy(proc.hists)
 rebinval=20
 
 htosum={}
-
+plotbkg=True
 if dataonly:
         qcdstr="DATA"
         htosum["DATA"]=alldat
@@ -1449,7 +1478,13 @@ elif mconly:
 elif qcdonly:
         qcdstr="QCD"
         htosum["QCD"]=["QCD_HT1500to2000","QCD_HT1000to1500","QCD_HT2000toInf"]
+else:
+        qcdstr=""
+        plotbkg=False  
+
+#histdicts=[histos,ratehistos]
 histdicts=[histos,ratehistos]
+
 for hdict in histdicts:
         for curh in htosum:
             hdict[curh]={}
@@ -1479,17 +1514,17 @@ output.cd()
 for RHtext in RateHists:
     RateHists[RHtext].Write("TRate"+RH)
 
-
-for ijet in range(njet):
-        regionstr="LT"+str(ijet)+str(njet-ijet)
-        for jjet in range(njet):
-                #print(ijet,jjet,histos[qcdstr].keys())
-                if ijet==0:
-                     histos[qcdstr]["pt_"+str(jjet)]=copy.deepcopy(histos[qcdstr]["pt_"+str(jjet)+regionstr])
-                     histos[qcdstr]["bkg_pt_"+str(jjet)]=copy.deepcopy(histos[qcdstr]["bkg_pt_"+str(jjet)+regionstr])
-                else:
-                     histos[qcdstr]["pt_"+str(jjet)].Add(histos[qcdstr]["pt_"+str(jjet)+regionstr])
-                     histos[qcdstr]["bkg_pt_"+str(jjet)].Add(histos[qcdstr]["bkg_pt_"+str(jjet)+regionstr])
+if plotbkg:
+        for ijet in range(njet):
+                regionstr="LT"+str(ijet)+str(njet-ijet)
+                for jjet in range(njet):
+                        #print(ijet,jjet,histos[qcdstr].keys())
+                        if ijet==0:
+                             histos[qcdstr]["pt_"+str(jjet)]=copy.deepcopy(histos[qcdstr]["pt_"+str(jjet)+regionstr])
+                             histos[qcdstr]["bkg_pt_"+str(jjet)]=copy.deepcopy(histos[qcdstr]["bkg_pt_"+str(jjet)+regionstr])
+                        else:
+                             histos[qcdstr]["pt_"+str(jjet)].Add(histos[qcdstr]["pt_"+str(jjet)+regionstr])
+                             histos[qcdstr]["bkg_pt_"+str(jjet)].Add(histos[qcdstr]["bkg_pt_"+str(jjet)+regionstr])
 
 for ds in ratehistos:
     for var in ratehistos[ds]:
@@ -1541,26 +1576,27 @@ if ntoys>0:
     canvtoys.Print('plots/httoys'+ds+'.root', 'root')  
     image = mpimg.imread('plots/httoys'+ds+'.png')
 
-    print("toys")    
-for ijet in range(njet):
-        if ijet==0:
-                histos[qcdstr]["ptTIGHTsum"]=copy.deepcopy(histos[qcdstr]["ptTIGHT"+str(ijet)])
-                histos[qcdstr]["bkg_ptTIGHTsum"]=copy.deepcopy(histos[qcdstr]["bkg_ptTIGHT"+str(ijet)])
-                histos[qcdstr]["ptLOOSEsum"]=copy.deepcopy(histos[qcdstr]["ptLOOSE"+str(ijet)])
-                histos[qcdstr]["bkg_ptLOOSEsum"]=copy.deepcopy(histos[qcdstr]["bkg_ptLOOSE"+str(ijet)])
-                histos[qcdstr]["ptLOOSEGTsum"]=copy.deepcopy(histos[qcdstr]["ptLOOSEGT"+str(ijet)])
-                histos[qcdstr]["bkg_ptLOOSEGTsum"]=copy.deepcopy(histos[qcdstr]["bkg_ptLOOSEGT"+str(ijet)])
-                histos[qcdstr]["pt_sum"]=copy.deepcopy(histos[qcdstr]["pt_"+str(ijet)])
-                histos[qcdstr]["bkg_pt_sum"]=copy.deepcopy(histos[qcdstr]["bkg_pt_"+str(ijet)])
-        else:
-                histos[qcdstr]["ptTIGHTsum"].Add(histos[qcdstr]["ptTIGHT"+str(ijet)])
-                histos[qcdstr]["bkg_ptTIGHTsum"].Add(histos[qcdstr]["bkg_ptTIGHT"+str(ijet)])
-                histos[qcdstr]["ptLOOSEsum"].Add(histos[qcdstr]["ptLOOSE"+str(ijet)])
-                histos[qcdstr]["bkg_ptLOOSEsum"].Add(histos[qcdstr]["bkg_ptLOOSE"+str(ijet)])
-                histos[qcdstr]["ptLOOSEGTsum"].Add(histos[qcdstr]["ptLOOSEGT"+str(ijet)])
-                histos[qcdstr]["bkg_ptLOOSEGTsum"].Add(histos[qcdstr]["bkg_ptLOOSEGT"+str(ijet)])
-                histos[qcdstr]["pt_sum"].Add(histos[qcdstr]["pt_"+str(ijet)])
-                histos[qcdstr]["bkg_pt_sum"].Add(histos[qcdstr]["bkg_pt_"+str(ijet)])
+    print("toys") 
+if plotbkg: 
+        for ijet in range(njet):
+                if ijet==0:
+                        histos[qcdstr]["ptTIGHTsum"]=copy.deepcopy(histos[qcdstr]["ptTIGHT"+str(ijet)])
+                        histos[qcdstr]["bkg_ptTIGHTsum"]=copy.deepcopy(histos[qcdstr]["bkg_ptTIGHT"+str(ijet)])
+                        histos[qcdstr]["ptLOOSEsum"]=copy.deepcopy(histos[qcdstr]["ptLOOSE"+str(ijet)])
+                        histos[qcdstr]["bkg_ptLOOSEsum"]=copy.deepcopy(histos[qcdstr]["bkg_ptLOOSE"+str(ijet)])
+                        histos[qcdstr]["ptLOOSEGTsum"]=copy.deepcopy(histos[qcdstr]["ptLOOSEGT"+str(ijet)])
+                        histos[qcdstr]["bkg_ptLOOSEGTsum"]=copy.deepcopy(histos[qcdstr]["bkg_ptLOOSEGT"+str(ijet)])
+                        histos[qcdstr]["pt_sum"]=copy.deepcopy(histos[qcdstr]["pt_"+str(ijet)])
+                        histos[qcdstr]["bkg_pt_sum"]=copy.deepcopy(histos[qcdstr]["bkg_pt_"+str(ijet)])
+                else:
+                        histos[qcdstr]["ptTIGHTsum"].Add(histos[qcdstr]["ptTIGHT"+str(ijet)])
+                        histos[qcdstr]["bkg_ptTIGHTsum"].Add(histos[qcdstr]["bkg_ptTIGHT"+str(ijet)])
+                        histos[qcdstr]["ptLOOSEsum"].Add(histos[qcdstr]["ptLOOSE"+str(ijet)])
+                        histos[qcdstr]["bkg_ptLOOSEsum"].Add(histos[qcdstr]["bkg_ptLOOSE"+str(ijet)])
+                        histos[qcdstr]["ptLOOSEGTsum"].Add(histos[qcdstr]["ptLOOSEGT"+str(ijet)])
+                        histos[qcdstr]["bkg_ptLOOSEGTsum"].Add(histos[qcdstr]["bkg_ptLOOSEGT"+str(ijet)])
+                        histos[qcdstr]["pt_sum"].Add(histos[qcdstr]["pt_"+str(ijet)])
+                        histos[qcdstr]["bkg_pt_sum"].Add(histos[qcdstr]["bkg_pt_"+str(ijet)])
 
 tocanv={"ht":[2,[0,5000]],"ptTIGHT":[2,[0,3000]],"ptTIGHTsum":[2,[0,3000]],"ptLOOSEGT":[2,[0,3000]],"ptLOOSEGTsum":[2,[0,3000]],"ptLOOSE":[2,[0,3000]],"ptLOOSEsum":[2,[0,3000]],"pt_":[2,[0,3000]],"pt_sum":[2,[0,3000]]}
 for ds in histos:
@@ -1740,66 +1776,87 @@ for ijet in range(njet+1):
 
                 curid+=1
 
-canvmulti=TCanvas(tc+ds,tc+ds,800,800)
-#canvmulti=TCanvas(tc+ds,tc+ds,int(800*(float(maxx)/3.0)),800*(float(njet+1)/4.0)))
-canvmulti.Divide(maxx,njet+1)
-for iar,ar in enumerate(canvhists):
+for ds in histos:
+        print(ds)
+        for ijet in range(njet+1):
+                regionstr="LT"+str(ijet)+str(njet-ijet)
+                print("ht",regionstr,histos[ds]["ht_"+regionstr].Integral())
 
-        main = ROOT.TPad("main", "main", 0, 0.3, 1, 1)
-        sub = ROOT.TPad("sub", "sub", 0, 0, 1, 0.3)
 
-        main.SetLeftMargin(0.16)
-        main.SetRightMargin(0.05)
-        main.SetTopMargin(0.11)
-        main.SetBottomMargin(0.0)
-
-        sub.SetLeftMargin(0.16)
-        sub.SetRightMargin(0.05)
-        sub.SetTopMargin(0)
-        sub.SetBottomMargin(0.3)
-        canvmulti.cd(canvids[iar])
-        main.Draw()
-        main.SetLogy()
-        sub.Draw()
-        main.cd()
-        rebin=4
-
-        histos[qcdstr]["ht_"+str(bin(ar))].Rebin(rebin)
-        histos[qcdstr]["bkg_ht_"+str(bin(ar))].Rebin(rebin)
-
-        histos[qcdstr]["ht_"+str(bin(ar))].GetXaxis().SetRangeUser(minht,5000.0)
-        histos[qcdstr]["bkg_ht_"+str(bin(ar))].GetXaxis().SetRangeUser(minht,5000.0)
-
-        histos[qcdstr]["ht_"+str(bin(ar))].Draw()
-        histos[qcdstr]["bkg_ht_"+str(bin(ar))].Draw("histsame")
+if plotbkg:
+        print("---")
+        print("SRB")
+        for ds in histos:
+                print(ds)
+                for ijet in range(njet+1):
+                        regionstr="LT"+str(ijet)+str(njet-ijet)
+                        
+                        print("ht",regionstr,histos[ds]["ht_"+regionstr].Integral()/math.sqrt(histos["QCD"]["bkg_ht_"+regionstr].Integral()))
         
-        histos[qcdstr]["ht_"+str(bin(ar))].SetStats(0) 
-        histos[qcdstr]["bkg_ht_"+str(bin(ar))].SetStats(0) 
-        sub.cd()
-        allrat.append(copy.deepcopy(histos[qcdstr]["ht_"+str(bin(ar))]) )
-        allrat[-1].Divide(histos[qcdstr]["bkg_ht_"+str(bin(ar))])
-        allrat[-1].GetYaxis().SetRangeUser(0.5,1.5)
-        allrat[-1].SetTitle(";ht(GeV);")
-        allrat[-1].GetXaxis().SetTitleSize (0.12)
-        allrat[-1].GetXaxis().SetLabelSize (0.09)
 
-        allrat[-1].GetYaxis().SetTitleSize (0.12)
-        allrat[-1].GetYaxis().SetLabelSize (0.09)
-        allrat[-1].GetXaxis().SetRangeUser(minht,5000.0)
-        #allrat[-1].Draw()    
+for ds in histos:
+        canvmulti=TCanvas(tc+ds,tc+ds,800,800)
+        #canvmulti=TCanvas(tc+ds,tc+ds,int(800*(float(maxx)/3.0)),800*(float(njet+1)/4.0)))
+        canvmulti.Divide(maxx,njet+1)
 
 
+        for iar,ar in enumerate(canvhists):
+
+                main = ROOT.TPad("main", "main", 0, 0.3, 1, 1)
+                sub = ROOT.TPad("sub", "sub", 0, 0, 1, 0.3)
+
+                main.SetLeftMargin(0.16)
+                main.SetRightMargin(0.05)
+                main.SetTopMargin(0.11)
+                main.SetBottomMargin(0.0)
+
+                sub.SetLeftMargin(0.16)
+                sub.SetRightMargin(0.05)
+                sub.SetTopMargin(0)
+                sub.SetBottomMargin(0.3)
+                canvmulti.cd(canvids[iar])
+                main.Draw()
+                main.SetLogy()
+                sub.Draw()
+                main.cd()
+                rebin=4
+
+                histos[ds]["ht_"+str(bin(ar))].Rebin(rebin)
+                histos[ds]["bkg_ht_"+str(bin(ar))].Rebin(rebin)
+
+                histos[ds]["ht_"+str(bin(ar))].GetXaxis().SetRangeUser(minht,5000.0)
+                histos[ds]["bkg_ht_"+str(bin(ar))].GetXaxis().SetRangeUser(minht,5000.0)
+
+                histos[ds]["ht_"+str(bin(ar))].Draw()
+                histos[ds]["bkg_ht_"+str(bin(ar))].Draw("histsame")
+                
+                histos[ds]["ht_"+str(bin(ar))].SetStats(0) 
+                histos[ds]["bkg_ht_"+str(bin(ar))].SetStats(0) 
+                sub.cd()
+                allrat.append(copy.deepcopy(histos[ds]["ht_"+str(bin(ar))]) )
+                allrat[-1].Divide(histos[ds]["bkg_ht_"+str(bin(ar))])
+                allrat[-1].GetYaxis().SetRangeUser(0.5,1.5)
+                allrat[-1].SetTitle(";ht(GeV);")
+                allrat[-1].GetXaxis().SetTitleSize (0.12)
+                allrat[-1].GetXaxis().SetLabelSize (0.09)
+
+                allrat[-1].GetYaxis().SetTitleSize (0.12)
+                allrat[-1].GetYaxis().SetLabelSize (0.09)
+                allrat[-1].GetXaxis().SetRangeUser(minht,5000.0)
+                #allrat[-1].Draw()    
 
 
-        allrat[-1].Fit("pol1")
+
+
+                allrat[-1].Fit("pol1")
 
 
 
-        allrat[-1].Draw("histe") 
-        line2.Draw()
-        line1.Draw()
+                allrat[-1].Draw("histe") 
+                line2.Draw()
+                line1.Draw()
 
-canvmulti.Write("subreg_ht")    
+        canvmulti.Write("subreg_ht"+ds)    
 
     
 output.Close()
